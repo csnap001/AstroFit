@@ -5,7 +5,7 @@ TODO: Rename the file so that it better describes its use.
 TODO: Should there be a toolbar?
 TODO: comment all code for easier readability
 TODO: add "clear screen" option for clearing displays
-TODO: Add threading of functions to allow continued functionality of other gui objects
+TODO: Add threading of functions to allow continued functionality of other QtGui objects
 TODO: Add progress bar for fits: self.progress = QtGui.ProgressBar(self) -> self.progress.setValue(**some increasing number**)
 TODO: Rework Gui using Pyqtgraph examples in site-packages within python, These seem more powerful
 
@@ -19,13 +19,13 @@ Class Functions:
 """
 
 import PyQt5.QtWidgets as qt
-import PyQt5.QtCore as core
-import PyQt5.QtGui as gui
+from pyqtgraph.Qt import QtCore,QtGui
 import pyqtgraph as pg
 from astropy.io import fits
 from astropy.table import Table
 from astropy import units as u
 from astropy.modeling import models
+from pyqtgraph.dockarea import *
 import numpy as np
 import sys
 import create_buttons as cb
@@ -34,37 +34,41 @@ import Initialize_View_Widgets as IVW
 from Layouts import Lay
 from Get_Pix_Position import Pos, off
 import time
-from My_Packages import MCMC_fine_tuning as mcmc
+from My_Packages import MCMC_fine_tuning as mcmc#TODO:Consider changing to pymultinest
 from My_Packages import FuncDef as fxn
 from My_Packages import confidence as conf
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 from functools import partial
 import os
 import corner
+from IPython import embed
 
 
-class App(qt.QWidget):
-    posSignal = core.pyqtSignal(list) #this must be defined as a class variable
-    XSignal = core.pyqtSignal(tuple)
+class App(QtGui.QMainWindow):
+    posSignal = QtCore.pyqtSignal(list) #this must be defined as a class variable
+    XSignal = QtCore.pyqtSignal(tuple)
     #outside of any function in order to work
     def __init__(self):
         super().__init__()
         '''
         setting images for cursors
         '''
-        Lpm = gui.QPixmap('Cursor_imgs/Left_under.png')
+        Lpm = QtGui.QPixmap('Cursor_imgs/Left_under.png')
         Lpm = Lpm.scaled(30,30) #can use this to scale
         #TODO: set position along left/right vertical line
-        self.Lcursor = gui.QCursor(Lpm) #TODO: set cursor position to corner
-        Rpm = gui.QPixmap('Cursor_imgs/Right_under.png')
+        self.Lcursor = QtGui.QCursor(Lpm) #TODO: set cursor position to corner
+        Rpm = QtGui.QPixmap('Cursor_imgs/Right_under.png')
         Rpm = Rpm.scaled(30,30)
-        self.Rcursor = gui.QCursor(Rpm)
+        self.Rcursor = QtGui.QCursor(Rpm)
 
         self.title = "SpecFit"
         self.left = 20
         self.top = 20
         self.width = 1000
         self.height = 1000
+
+        self.plt = []#list containing plot information for each added 1d plot
+        self.names1d = []#list containing names1d of 1d plots to allow for removal
 
         self.is1d = False
         self.is2d = False
@@ -106,10 +110,32 @@ class App(qt.QWidget):
         
 
     def initUI(self):
+        self.area = DockArea()
+        self.setCentralWidget(self.area)
+        self.resize(self.width,self.height)
         self.setWindowTitle(self.title)
-        self.setGeometry(self.left,self.top,self.width,self.height)
-
-        self.fitProgress = gui.QProgressBar(self)
+        self.dtool = Dock("Toolbar",size=(1,1))
+        self.dplot = Dock("plots",size=(500,300))
+        self.dTable = Dock("Table",size=(500,300))
+        self.area.addDock(self.dtool,'top')
+        self.area.addDock(self.dplot,'bottom',self.dtool)
+        self.area.addDock(self.dTable,'right',self.dplot)
+        self.Gwin1d = pg.GraphicsWindow()
+        self.table = pg.TableWidget()
+        #plt = self.Gwin1d.addPlot(title="plotting")#NOTE: not fixed
+        #plt.addLegend()#NOTE:addLegend must come before plot
+        #plt.plot([1,2,3],[1,2,3],pen=(255,0,0),name='red')
+        #lr = pg.LinearRegionItem([1,2])#get values using lr.getRegion()
+        #print(plt.Title)
+        #argument should be based off of data
+        #TODO:add linear region button (have to ensure it goes to desired plot)
+        #TODO:add "add plot" button to allow for displaying multiple plots at a time
+        #plt.addItem(lr)
+        self.dplot.addWidget(self.Gwin1d)
+        self.dTable.addWidget(self.table)
+        self.dtool.hideTitleBar()
+        
+        self.fitProgress = QtGui.QProgressBar(self)
         #Creating buttons
         cb.buttons(self)
 
@@ -117,23 +143,48 @@ class App(qt.QWidget):
         conb.connect(self)
 
         #Create 1d, 2d, buttons, and table widgets
+        '''
         pg.setConfigOption('background','w')
         pg.setConfigOption('foreground','k')
         IVW.Views(self)
         #self.plot_view.setMouseTracking(True)
         #pg.SignalProxy(self.plot_view.scene().sigMouseMoved, rateLimit=60,slot=self.mouseMoveEvent)
         #self.plot_view.scene().sigMouseMoved.connect(self.mouseMoveEvent)
-
+        '''
         Lay(self)
-
         self.show()
 
+    
+    def addPlot(self,name):
+        #TODO:need to figure out how to handle placement after removing plots
+        num = len(self.plt)
+        if num < 2:
+            self.plt.append(self.Gwin1d.addPlot(title=name))
+        elif num >= 2 and num < 4:
+            self.plt.append(self.Gwin1d.addPlot(row=1,col=num-2,title=name))
+        elif num >=4 and num < 6:
+            self.plt.append(self.Gwin1d.addPlot(row=2,col=num-4,title=name))
+        else:
+            qt.QMessageBox.about(self,"Too Many!","Too many plots, not adding")
+            return -1
+
+    def removePlot(self):
+        choice, ok = qt.QInputDialog.getItem(self,"Removing 1d?","Which plot?:",self.names1d,0,False)
+        loc = self.names1d.index(choice)
+        #embed()
+        if ok:
+            self.Gwin1d.removeItem(self.plt[loc])
+            self.plt.pop(loc)
+        else:
+            qt.QMessageBox.about(self,"Done","Not Removing any plots")
+
     def mouseMoveEvent(self,event):
-        #TODO: Ensure only called when in box
-        vb = self.plot_view.getViewBox()
-        if isinstance(event,core.QPointF):#checks if variable is an instance of the given class
-            point = vb.mapSceneToView(event)
-            self.text.setText("x={0:.2f}, y={1:.2E}".format(point.x(),point.y()))
+        pos = event
+        for plot in self.plt:
+            vb = plot.getViewBox()
+            if isinstance(event,QtCore.QPointF) and plot.sceneBoundingRect().contains(pos):#checks if variable is an instance of the given class
+                point = vb.mapSceneToView(event)
+                plot.setLabel("top",text='x={0:1f}, y={1:.2E}'.format(point.x(),point.y()))
 
 
     #grabs .fits file for 1d visualization
@@ -168,7 +219,10 @@ class App(qt.QWidget):
 
         if exten == ".fits":
             if is1d:
-                self.plot_1d_fits(fileName=fileName)
+                check = self.addPlot(name=fileName)
+                if check != -1:
+                    self.plot_1d_fits(fileName=fileName)
+                    self.names1d.append(fileName)
             if is2d:
                 self.show_2d_fits(fileName=fileName)
             if isTab:
@@ -217,11 +271,11 @@ class App(qt.QWidget):
     # number of data axes. So in bill's data the header has NAXIS = 1 and then in the 
     # image files we have NAXIS = 2. We can use this to implement restrictions
     #TODO: Consider Plotting BINNED data, since this more accurately represents the physical 
-    # measurement. must consider how to do this. Ask Brian
-    #NOTE: Wavelength data is usually given by some start wavelength, delta wavelength, and number of pixels
+    # measurement. must consider how to do this. Ask Brian. Use .step
+    #NOTE: Wavelength data can be given by some start wavelength, delta wavelength, and number of pixels
     # Therefore, it is necessary to grab this information and construct the wavelength bins
     def plot_1d_fits(self,fileName=""):
-        self.plot_view.clear()#TODO: consider using .setData() instead of clear() as this requires less overhead
+        count = len(self.plt) - 1
         #TODO: add legend (should be done for fits as well). legend = pg.LegendItem, legend.setParentItem(self.plot_view)
         #TODO: add title as filename that has been opened and plotted
         if fileName:
@@ -233,11 +287,11 @@ class App(qt.QWidget):
             print(flux[0])
             wl = [stwl + step*i for i in range(len(flux))]
             err = hdul[2].data
-            pen = pg.mkPen(color='k')
-            self.flux = self.plot_view.plot(wl,flux,pen=pen)
-            self.err = self.plot_view.plot(wl,err)
-            pg.SignalProxy(self.plot_view.scene().sigMouseMoved, rateLimit=60,slot=self.mouseMoveEvent)
-            self.plot_view.scene().sigMouseMoved.connect(self.mouseMoveEvent)
+            pen = pg.mkPen(color='b')
+            self.flux = self.plt[count].plot(wl,flux,pen=pen)
+            self.err = self.plt[count].plot(wl,err)
+            pg.SignalProxy(self.plt[count].scene().sigMouseMoved, rateLimit=60,slot=self.mouseMoveEvent)
+            self.plt[count].scene().sigMouseMoved.connect(self.mouseMoveEvent)
             
             
        
@@ -383,7 +437,7 @@ class App(qt.QWidget):
         if not(self.contBut.isChecked()):
             self.isMask = False
             self.count = 0
-            self.plot_view.setCursor(core.Qt.CursorShape(2))
+            self.plot_view.setCursor(QtCore.Qt.CursorShape(2))
             self.plot_view.scene().sigMouseClicked.disconnect()
             data = self.plot_view.listDataItems()
             #geting data for fitting continuum and plotting chosen points
@@ -562,7 +616,7 @@ class App(qt.QWidget):
             corner.corner(np.transpose(self.pdfs[func][0]),bins=250,quantiles=[0.16,0.5,0.84],show_titles=True,
                         labels=labels,verbose=True,plot_contours=True,title_fmt=".2E",truths=self.pdfs[func][1],
                         levels=(0.68,)) #must be (values, # of parameters), (i.e. (365,4) corresponds to a fit with four parameters)
-            plt.show()
+            #plt.show()
                 
     def plotColoring(self,isFlux = False, isErr=False):
         color = qt.QColorDialog.getColor()
@@ -607,7 +661,7 @@ class App(qt.QWidget):
                 
                 
             if self.count == 1:
-                self.plot_view.setCursor(core.Qt.CursorShape(2))
+                self.plot_view.setCursor(QtCore.Qt.CursorShape(2))
                 self.Rbound = vb.mapSceneToView(pos).x()
                 
             if self.count == 2:
@@ -645,7 +699,7 @@ class App(qt.QWidget):
            
 
         
-    @core.pyqtSlot(list)
+    @QtCore.pyqtSlot(list)
     def getPos(self,value):
        
         self.xpos = value[0]
@@ -655,7 +709,7 @@ class App(qt.QWidget):
         self.fitting_1d()
         
 
-    @core.pyqtSlot(tuple)
+    @QtCore.pyqtSlot(tuple)
     def getX(self,value):
         self.Mask.append(value)
         

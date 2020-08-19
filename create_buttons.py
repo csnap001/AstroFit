@@ -11,7 +11,8 @@ import sys
 
 def buttons(self):
         self.imgbut = qt.QPushButton("Show 2d fits",self)
-        self.specbut = qt.QPushButton("Show 1d Spec",self)
+        self.specbut = qt.QPushButton("Add 1d Plot",self)
+        self.rm1dPlot = qt.QPushButton("Remove 1d Plot",self)
         self.tbl = qt.QPushButton("Fits table",self)
         self.ewBut = qt.QPushButton("EW",self)
         self.ewBut.setCheckable(True)

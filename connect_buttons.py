@@ -13,6 +13,7 @@ import sys
 def connect(self):
         self.imgbut.clicked.connect(self.file2d)
         self.specbut.clicked.connect(self.file1d)
+        self.rm1dPlot.clicked.connect(self.removePlot)
         self.tbl.clicked.connect(self.fileTab)
         self.Dcolorbut.clicked.connect(self.set1dFluxCol)
         self.EcolorBut.clicked.connect(self.set1dErrCol)
