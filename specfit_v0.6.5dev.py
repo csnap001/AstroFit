@@ -241,19 +241,17 @@ class App(QtGui.QMainWindow):
     
     def table_create(self,fileName=""):
         
-        self.tabWid.clear()
+        self.table.clear()
         fits = fileName.find(".fits")
         dat = fileName.find(".dat")
         txt = fileName.find(".txt")
         if not(fits == -1):
             data = Table.read(fileName,format='fits')
-            self.tabWid.setColumnCount(len(data.colnames))
-            self.tabWid.setRowCount(len(data))
-        
-            self.tabWid.setHorizontalHeaderLabels(data.colnames)
+            self.table.setColumnCount(len(data.colnames))
+            self.table.setRowCount(len(data))
+            self.table.setHorizontalHeaderLabels(data.colnames)
             for i in range(len(data)):
-                for j in range(len(data.colnames)):
-                    self.tabWid.setItem(i,j,qt.QTableWidgetItem(str(data[i][j]))) #argument must be string
+                self.table.setRow(i,data[i])
         if not(dat == -1):
             pass
         if not(txt == -1):
@@ -274,22 +272,70 @@ class App(QtGui.QMainWindow):
     # measurement. must consider how to do this. Ask Brian. Use .step
     #NOTE: Wavelength data can be given by some start wavelength, delta wavelength, and number of pixels
     # Therefore, it is necessary to grab this information and construct the wavelength bins
+    def updatePlot(self,count,wl,flux,err):
+        self.plt[count].clear()
+        pen = pg.mkPen(color='b')
+        self.flux = self.plt[count].plot(wl,flux,stepMode=True,pen=pen)
+        self.err = self.plt[count].plot(wl,err,stepMode=True)
+    
+    def headerDisplay(self,hdul):
+        hdus = []
+        for item in hdul:
+            key = item.header.keys()
+            strng = ""
+            while True:
+                try: k = key.send(None)
+                except StopIteration: break
+                strng += k + "= " + str(item.header[k]) + "\n"
+            hdus.append(strng)
+            qt.QMessageBox.about(self,"Showing {}".format(item),strng)
+            
+            
+
     def plot_1d_fits(self,fileName=""):
         count = len(self.plt) - 1
         #TODO: add legend (should be done for fits as well). legend = pg.LegendItem, legend.setParentItem(self.plot_view)
         #TODO: add title as filename that has been opened and plotted
+        data = []
         if fileName:
             hdul = fits.open(fileName)
+            for i in range(len(hdul)):
+                try:
+                    data.append(hdul[i].data)
+                except RuntimeError:
+                    print(i)
+            #NOTE: can generate header using key = hdul[i].header.keys(), then key.send(None) generates the next key
+            # can have loop: str += key.send(None) + '= ' + hdul[i].header[key.send(None)] + '\n'
+            self.headerDisplay(hdul)
+            #embed()
+            while True:
+                x, ok = qt.QInputDialog.getItem(self,"data","Choose your x axis:",[data[1].columns[i].name for i in range(len(data[1].columns))],0,False)
+                y, ok = qt.QInputDialog.getItem(self,"data","Choose your y axis:",[data[1].columns[i].name for i in range(len(data[1].columns))],0,False)
+                err, ok = qt.QInputDialog.getItem(self,"data","Choose your err axis:",[data[1].columns[i].name for i in range(len(data[1].columns))],0,False)
+                x = data[1][x]
+                y = data[1][y]
+                err = data[1][err]
+                if (x is not None) and (y is not None): self.updatePlot(count,x,y,err)
+                else: qt.QMessageBox.about(self,"Showing {0},{1}".format(x,y),"One data set is not valid")
+                Happy, ok = qt.QInputDialog.getItem(self,"Good","Happy?:",["True","False"],0,False)
+                if Happy == "True":
+                    break
+            #TODO: How to grab data arbitrarily?
+            #embed()
+
+
+            '''
             stwl = hdul[0].header['CRVAL1']
-            print(stwl)
+            #print(stwl)
             step = hdul[0].header['CDELT1']
             flux = hdul[1].data
-            print(flux[0])
+            #print(flux[0])
             wl = [stwl + step*i for i in range(len(flux))]
             err = hdul[2].data
             pen = pg.mkPen(color='b')
-            self.flux = self.plt[count].plot(wl,flux,pen=pen)
+            self.flux = self.plt[count].plot(wl,flux,pen=pen)#NOTE: these allow me to change the colors of these plots
             self.err = self.plt[count].plot(wl,err)
+            '''
             pg.SignalProxy(self.plt[count].scene().sigMouseMoved, rateLimit=60,slot=self.mouseMoveEvent)
             self.plt[count].scene().sigMouseMoved.connect(self.mouseMoveEvent)
             
