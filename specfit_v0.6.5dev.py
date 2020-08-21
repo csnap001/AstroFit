@@ -37,7 +37,7 @@ import time
 from My_Packages import MCMC_fine_tuning as mcmc#TODO:Consider changing to pymultinest
 from My_Packages import FuncDef as fxn
 from My_Packages import confidence as conf
-#import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 from functools import partial
 import os
 import corner
@@ -130,15 +130,6 @@ class App(QtGui.QMainWindow):
         self.Gwin1d = pg.GraphicsWindow()
         self.Gwin1d.resize(1000,600)
         self.table = pg.TableWidget()
-        #plt = self.Gwin1d.addPlot(title="plotting")#NOTE: not fixed
-        #plt.addLegend()#NOTE:addLegend must come before plot
-        #plt.plot([1,2,3],[1,2,3],pen=(255,0,0),name='red')
-        #lr = pg.LinearRegionItem([1,2])#get values using lr.getRegion()
-        #print(plt.Title)
-        #argument should be based off of data
-        #TODO:add linear region button (have to ensure it goes to desired plot)
-        #TODO:add "add plot" button to allow for displaying multiple plots at a time
-        #plt.addItem(lr)
         self.dplot.addWidget(self.Gwin1d)
         self.regDock.addWidget(self.regWin)
         self.dTable.addWidget(self.table)
@@ -213,9 +204,8 @@ class App(QtGui.QMainWindow):
 
     def removePlot(self):
         choice, ok = qt.QInputDialog.getItem(self,"Removing 1d?","Which plot?:",self.names1d,0,False)
-        loc = self.names1d.index(choice)
-        #embed()
         if ok:
+            loc = self.names1d.index(choice)
             self.Gwin1d.removeItem(self.plt[loc])
             self.plt.pop(loc)
         else:
@@ -548,58 +538,30 @@ class App(QtGui.QMainWindow):
         to the flux data with consideration of the error spectrum. Should also consider setting up
         a list of masks to the data to use for continuum fitting
         """
-        #TODO: must ask 2 questions. 1: which plot? 2:which linear region?
+        #TODO: must ask 2 questions. 1: which plot? 2:which linear region? (this should be limited to those within the plot)
         # 1 gives the data to be analyzed, 2 gives the masking region (multiple regions?)
-        choice, ok = qt.QInputDialog.getItem(self,"Removing 1d?","Which plot?:",self.names1d,0,False)
-        choice, ok = qt.QInputDialog.getItem(self,"Removing 1d?","Which plot?:",self.names1d,0,False)
-        
-        data = self.plt[choice].listDataItems()
-        mask = 0
-        #geting data for fitting continuum and plotting chosen points
-        if(len(data) > 0):
-            boolMask = [len(self.Mask[i]) == 2 for i in range(len(self.Mask))]
-            if (self.Mask) and np.all(boolMask):
-                data = [data[0].getData(),data[1].getData()]
-                trange = self.plot_view.viewRange()
-                yrange = trange[1]
-                holdToRemove = []
-                fmask = []
-                for i in range(len(self.Mask)):
-                    line_data = [[self.Mask[i][0],self.Mask[i][0]],[yrange[0],yrange[1]]]
-                    rine_data = [[self.Mask[i][1],self.Mask[i][1]],[yrange[0],yrange[1]]]
-                    b = pg.PlotDataItem(x=line_data[0],y=line_data[1],pen='b')
-                    r = pg.PlotDataItem(x=rine_data[0],y=rine_data[1],pen='r')#symbol is another argument, best for scatterplotitem
-                    self.plot_view.addItem(b)
-                    self.plot_view.addItem(r)
-                    holdToRemove.append(b) #used to remove these lines if you do not perform the fit
-                    holdToRemove.append(r)
-                    fmask.append((data[0][0] > self.Mask[i][0]) & (data[0][0] < self.Mask[i][1]))
-                    
-            else:
-                qt.QMessageBox.about(self,"No choice", "No bounds chosen or Not an even number of bounds: #bounds = {}, not fitting".format(boolMask))
-                self.Mask = []
-                #TODO: make sure that all plotted bounds are deleted in this process
-                return
-                
-        else:
-            qt.QMessageBox.about(self,"No Data","No data to fit to!")
+        choice, ok = qt.QInputDialog.getItem(self,"Which to fit","Choose data set:",self.names1d,0,False)
+        if not(ok):
+            qt.QMessageBox.about(self,"Not Fitting","Chose no data, not fitting.")
             return
-        if(len(fmask)>1):fmask = [fmask[i]|fmask[i+1] for i in range(len(fmask) - 1)]
-        print(fmask)
-        flux = data[0][1][fmask]
-        wl = data[0][0][fmask]
-        err = data[1][1][fmask]#TODO: Check data type of fmask
-        #Seems like all that needs to be done is to change fmask -> tuple(fmask)?
-        '''
-        FutureWarning: Using a non-tuple sequence for 
-        multidimensional indexing is deprecated; use `arr[tuple(seq)]` instead of `arr[seq]`. 
-        In the future this will be interpreted as an array index, `arr[np.array(seq)]`, 
-        which will result either in an error or a different result.
-        err = data[1][1][fmask]
-        '''
+
+        check = [self.regPlot[i].getViewBox().viewRange()[0][0] for i in np.arange(len(self.regPlot))]
+        reg, ok = qt.QInputDialog.getItem(self,"Choose a region","Which plot?:",np.array(check,str),0,False)#TODO: allow for multiple regions? or only abs masking?
+        if not(ok):
+            qt.QMessageBox.about(self,"Not Fitting","Do not currently support no region choice")
+            return
+
+        #geting data for fitting continuum and plotting chosen points
+        mask_choice = check.index(float(reg))
+        dat_choice = self.names1d.index(choice)
+        data = self.plt[dat_choice].listDataItems()
+        lr = self.lrs[mask_choice].getRegion()
+        mask = (data[0].getData()[0] > lr[0]) & (data[0].getData()[0] < lr[1])
+        flux = data[0].getData()[1][mask]
+        wl = data[0].getData()[0][mask]
+        err = data[1].getData()[1][mask]
         
         Ans = qt.QMessageBox.question(self,"Masking","Mask Emission and Absorption lines?",qt.QMessageBox.Yes|qt.QMessageBox.No,qt.QMessageBox.No)
-
 
         if Ans==qt.QMessageBox.Yes:
             z, ok = qt.QInputDialog.getDouble(self,"Get redshift","z:",2.0,0.0,10.0,10)
@@ -624,16 +586,16 @@ class App(QtGui.QMainWindow):
         func, ok = qt.QInputDialog.getItem(self,"Get function","Function: ",items,0,False)
         if func == 'Power Law' and ok:
             #TODO: Force left bound as "centroid" in Pow?
-            self.Fitter(fxn.Pow,data,flux,err,wl,[(np.min(flux),np.max(flux)),(-3,1),(np.min(wl),np.max(wl))],name='continuum')
+            self.Fitter(fxn.Pow,data,flux,err,wl,[(np.min(flux),np.max(flux)),(-3,1),(np.min(wl),np.max(wl))],name='continuum',plt_name=dat_choice)
             self.cname = 'pl'
             self.contfit[1].append('pl')
-        if func == 'Linear' and ok:
-            self.line = partial(fxn.linear,b=self.Mask[0][0])
-            self.Fitter(self.line,data,flux,err,wl,[(np.min(flux),np.max(flux)),(np.min(flux)/np.max(wl),np.max(flux)/np.min(wl))],name='continuum')
+        elif func == 'Linear' and ok:
+            self.line = partial(fxn.linear,b=lr[0])
+            self.Fitter(self.line,data,flux,err,wl,[(np.min(flux),np.max(flux)),(np.min(flux)/np.max(wl),np.max(flux)/np.min(wl))],name='continuum',plt_name=dat_choice)
             #TODO: is the slope range reasonable?
             self.cname = 'l'
             self.contfit[1].append('l')
-        if func == 'Polynomial' and ok:
+        elif func == 'Polynomial' and ok:
             order, check = qt.QInputDialog.getInt(self,"Polynomial","What Order?:",0,False)
             if check:
                 self.cname = 'p'
@@ -642,14 +604,15 @@ class App(QtGui.QMainWindow):
                 guess.append((np.min(flux),np.max(flux)))
                 for i in range(order):
                     guess.append(((np.min(flux)/np.max(wl))**(i+1),(np.max(flux)/np.min(wl)**(i+1))))
-                self.Fitter(fxn.polynomial,data,flux,err,wl,guess,name='continuum')
-        if not(ok):#TODO: consider using else, this is kind of weird coding
+                self.Fitter(fxn.polynomial,data,flux,err,wl,guess,name='continuum',plt_name=dat_choice)
+        else:#TODO: consider using else, this is kind of weird coding
             qt.QMessageBox.about(self,"Continuum","Not fitting continuum")
+        
                 
         return
         
     
-    def Fitter(self,func,data,flux,err,wl,bounds,name = ''):
+    def Fitter(self,func,data,flux,err,wl,bounds,name = '',plt_name=None):
         '''
         helper function for fitting algorithms (cont_fit, and ew)
         '''
@@ -690,7 +653,7 @@ class App(QtGui.QMainWindow):
             self.ewfit.append(ps)
             self.ewferr.append(value)
             self.pdfs[name] = (mymc[0],ps)
-            ewPdf = np.sqrt(2*np.pi)*np.array(mymc[0][0])*np.array(mymc[0][2])
+            ewPdf = np.sqrt(2*np.pi)*np.array(mymc[0][0])*np.array(mymc[0][2])#TODO: multiply by "prior" which is the full continuum pdf
             ewMeas = np.sqrt(2*np.pi)*ps[0]*ps[2]
             self.pdfs['EWPDF'] = [ewPdf,[ewMeas]]
             pen = (0,100,0)
@@ -705,7 +668,7 @@ class App(QtGui.QMainWindow):
             elif self.cname == 'p':
                 cont = fxn.polynomial(data[0][0],*self.fit)
         self.fitProgress.setValue(100)    
-        self.plot_view.plot(data[0][0],cont*func(data[0][0],*ps),pen=pen)
+        self.plt[plt_name].plot(data[0].getData()[0],cont*func(data[0].getData()[0],*ps),pen=pen)
 
     def showPDFS(self):
         '''
@@ -722,7 +685,7 @@ class App(QtGui.QMainWindow):
             corner.corner(np.transpose(self.pdfs[func][0]),bins=250,quantiles=[0.16,0.5,0.84],show_titles=True,
                         labels=labels,verbose=True,plot_contours=True,title_fmt=".2E",truths=self.pdfs[func][1],
                         levels=(0.68,)) #must be (values, # of parameters), (i.e. (365,4) corresponds to a fit with four parameters)
-            #plt.show()
+            plt.show()
                 
     def plotColoring(self,isFlux = False, isErr=False):
         color = qt.QColorDialog.getColor()

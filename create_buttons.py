@@ -22,6 +22,5 @@ def buttons(self):
         self.Dcolorbut = qt.QPushButton("Data color",self)
         self.EcolorBut = qt.QPushButton("Err color", self)
         self.contBut = qt.QPushButton("Fit Cont", self)
-        self.contBut.setCheckable(True)
         self.getFitsBut = qt.QPushButton("Get Fits",self)
         return

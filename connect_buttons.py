@@ -18,7 +18,7 @@ def connect(self):
         self.Dcolorbut.clicked.connect(self.set1dFluxCol)
         self.EcolorBut.clicked.connect(self.set1dErrCol)
         self.ewBut.clicked[bool].connect(self.fitting_1d)#TODO: change this
-        self.contBut.clicked[bool].connect(self.Cont_Fit)
+        self.contBut.clicked.connect(self.Cont_Fit)
         self.getFitsBut.clicked.connect(self.showPDFS)
         self.addReg.clicked.connect(self.whichPlot)
         self.remReg.clicked.connect(self.removeRegPlot)
