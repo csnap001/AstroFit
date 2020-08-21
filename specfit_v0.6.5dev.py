@@ -618,6 +618,7 @@ class App(QtGui.QMainWindow):
         '''
         #TODO: Threading for progress bar? Maybe just add in self.MCMC code block?
         self.fitProgress.setValue(50)
+        #TODO: Need to fix mcmc or use emcee or MULTINEST?
         mymc = mcmc.fit(func,wl,flux,err, 7000,*bounds) #was 1000
         hists = []
         ps = []
