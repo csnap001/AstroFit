@@ -13,6 +13,8 @@ def buttons(self):
         self.imgbut = qt.QPushButton("Show 2d fits",self)
         self.specbut = qt.QPushButton("Add 1d Plot",self)
         self.rm1dPlot = qt.QPushButton("Remove 1d Plot",self)
+        self.addReg = qt.QPushButton("Add region",self)
+        self.remReg = qt.QPushButton("Remove region",self)
         self.tbl = qt.QPushButton("Fits table",self)
         self.ewBut = qt.QPushButton("EW",self)
         self.ewBut.setCheckable(True)

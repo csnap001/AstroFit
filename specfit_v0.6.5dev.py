@@ -69,6 +69,9 @@ class App(QtGui.QMainWindow):
 
         self.plt = []#list containing plot information for each added 1d plot
         self.names1d = []#list containing names1d of 1d plots to allow for removal
+        self.lrs = []#list of linear regions for data selection (i.e. for fitting continua or EWs)
+        self.regPlot = []#list to hold region plots
+        self.yrange = [0,1]
 
         self.is1d = False
         self.is2d = False
@@ -110,6 +113,7 @@ class App(QtGui.QMainWindow):
         
 
     def initUI(self):
+        
         self.area = DockArea()
         self.setCentralWidget(self.area)
         self.resize(self.width,self.height)
@@ -117,10 +121,14 @@ class App(QtGui.QMainWindow):
         self.dtool = Dock("Toolbar",size=(1,1))
         self.dplot = Dock("plots",size=(500,300))
         self.dTable = Dock("Table",size=(500,300))
+        self.regDock = Dock("Regions",size=(500,300))
+        self.regWin = pg.GraphicsWindow()
         self.area.addDock(self.dtool,'top')
         self.area.addDock(self.dplot,'bottom',self.dtool)
+        self.area.addDock(self.regDock,'below',self.dplot)
         self.area.addDock(self.dTable,'right',self.dplot)
         self.Gwin1d = pg.GraphicsWindow()
+        self.Gwin1d.resize(1000,600)
         self.table = pg.TableWidget()
         #plt = self.Gwin1d.addPlot(title="plotting")#NOTE: not fixed
         #plt.addLegend()#NOTE:addLegend must come before plot
@@ -132,6 +140,7 @@ class App(QtGui.QMainWindow):
         #TODO:add "add plot" button to allow for displaying multiple plots at a time
         #plt.addItem(lr)
         self.dplot.addWidget(self.Gwin1d)
+        self.regDock.addWidget(self.regWin)
         self.dTable.addWidget(self.table)
         self.dtool.hideTitleBar()
         
@@ -154,16 +163,50 @@ class App(QtGui.QMainWindow):
         Lay(self)
         self.show()
 
-    
+    #TODO: need to be able to update each region not just the most recent
+    def updateLR(self):
+        self.lrs[len(self.lrs)-1].setRegion(self.regPlot[len(self.regPlot)-1].getViewBox().viewRange()[0])
+        abdata = self.regPlot[len(self.regPlot)-1].listDataItems()
+        data = (abdata[0].getData()[0],abdata[0].getData()[1],abdata[1].getData()[1])
+        mask = (data[0] > self.regPlot[len(self.regPlot)-1].getViewBox().viewRange()[0][0]) & (data[0] < self.regPlot[len(self.regPlot)-1].getViewBox().viewRange()[0][1])
+        if len(data[1][mask]) > 0: self.yrange = [np.min(data[1][mask]) - 0.8*np.min(data[1][mask]),1.5*np.max(data[1][mask])]
+
+    def addRegionPlot(self,data):
+        num = len(self.regPlot)
+        if num < 2:
+            self.regPlot.append(self.regWin.addPlot(title="Region data"))
+            self.regPlot[len(self.regPlot)-1].addLegend()
+            self.regPlot[len(self.regPlot)-1].plot(data[0],data[1],color='w',name='Flux')
+            self.regPlot[len(self.regPlot)-1].plot(data[0],data[2],color='red',name='Error')
+            self.regPlot[len(self.regPlot)-1].sigXRangeChanged.connect(self.updateLR)
+        elif num >= 2 and num < 4:
+            self.regPlot.append(self.regWin.addPlot(row=1,col=num-2,title="Region data"))
+            self.regPlot[len(self.regPlot)-1].addLegend()
+            self.regPlot[len(self.regPlot)-1].plot(data[0],data[1],color='w',name='Flux')
+            self.regPlot[len(self.regPlot)-1].plot(data[0],data[2],color='red',name='Error')
+            self.regPlot[len(self.regPlot)-1].sigXRangeChanged.connect(self.updateLR)
+        elif num >= 4 and num < 6:
+            self.regPlot.append(self.regWin.addPlot(row=2,col=num-4,title="Region data"))
+            self.regPlot[len(self.regPlot)-1].addLegend()
+            self.regPlot[len(self.regPlot)-1].plot(data[0],data[1],color='w',name='Flux')
+            self.regPlot[len(self.regPlot)-1].plot(data[0],data[2],color='red',name='Error')
+            self.regPlot[len(self.regPlot)-1].sigXRangeChanged.connect(self.updateLR)
+
     def addPlot(self,name):
         #TODO:need to figure out how to handle placement after removing plots
         num = len(self.plt)
         if num < 2:
             self.plt.append(self.Gwin1d.addPlot(title=name))
+            n = len(self.plt)
+            self.plt[n-1].setCursor(QtCore.Qt.CrossCursor)
         elif num >= 2 and num < 4:
             self.plt.append(self.Gwin1d.addPlot(row=1,col=num-2,title=name))
+            n = len(self.plt)
+            self.plt[n-1].setCursor(QtCore.Qt.CrossCursor)
         elif num >=4 and num < 6:
             self.plt.append(self.Gwin1d.addPlot(row=2,col=num-4,title=name))
+            n = len(self.plt)
+            self.plt[n-1].setCursor(QtCore.Qt.CrossCursor)
         else:
             qt.QMessageBox.about(self,"Too Many!","Too many plots, not adding")
             return -1
@@ -178,6 +221,19 @@ class App(QtGui.QMainWindow):
         else:
             qt.QMessageBox.about(self,"Done","Not Removing any plots")
 
+    def removeRegPlot(self):
+        check = [self.regPlot[i].getViewBox().viewRange()[0][0] for i in np.arange(len(self.regPlot))]
+        choice, ok = qt.QInputDialog.getItem(self,"Removing Region","Which Region?:",np.array(check,dtype=str),0,False)
+        ind = check.index(float(choice))
+        if ok:
+            self.regWin.removeItem(self.regPlot[ind])
+            self.regPlot.pop(ind)
+            self.plt[0].removeItem(self.lrs[ind])#TODO:need to figure out how to grab parent plot
+            self.lrs.pop(ind)#The two should increase and be placed together in these lists
+            #TODO: need to double check this works well
+        else:
+            qt.QMessageBox.about(self,"Done","Not Removing Region")
+
     def mouseMoveEvent(self,event):
         pos = event
         for plot in self.plt:
@@ -185,7 +241,6 @@ class App(QtGui.QMainWindow):
             if isinstance(event,QtCore.QPointF) and plot.sceneBoundingRect().contains(pos):#checks if variable is an instance of the given class
                 point = vb.mapSceneToView(event)
                 plot.setLabel("top",text='x={0:1f}, y={1:.2E}'.format(point.x(),point.y()))
-
 
     #grabs .fits file for 1d visualization
     def file1d(self):
@@ -268,15 +323,15 @@ class App(QtGui.QMainWindow):
     #NOTE: Each fits file extension (i.e. hdul[1]) as an NAXIS memeber that states the 
     # number of data axes. So in bill's data the header has NAXIS = 1 and then in the 
     # image files we have NAXIS = 2. We can use this to implement restrictions
-    #TODO: Consider Plotting BINNED data, since this more accurately represents the physical 
-    # measurement. must consider how to do this. Ask Brian. Use .step
+    #TODO: Consider Plotting BINNED data, can use stepMode = True, but requires len(x) == len(y) + 1
     #NOTE: Wavelength data can be given by some start wavelength, delta wavelength, and number of pixels
     # Therefore, it is necessary to grab this information and construct the wavelength bins
     def updatePlot(self,count,wl,flux,err):
         self.plt[count].clear()
         pen = pg.mkPen(color='b')
-        self.flux = self.plt[count].plot(wl,flux,stepMode=True,pen=pen)
-        self.err = self.plt[count].plot(wl,err,stepMode=True)
+        self.plt[count].addLegend()
+        self.flux = self.plt[count].plot(wl,flux,pen=pen,name='Flux')
+        self.err = self.plt[count].plot(wl,err,name='Error')
     
     def headerDisplay(self,hdul):
         hdus = []
@@ -290,8 +345,6 @@ class App(QtGui.QMainWindow):
             hdus.append(strng)
             qt.QMessageBox.about(self,"Showing {}".format(item),strng)
             
-            
-
     def plot_1d_fits(self,fileName=""):
         count = len(self.plt) - 1
         #TODO: add legend (should be done for fits as well). legend = pg.LegendItem, legend.setParentItem(self.plot_view)
@@ -339,9 +392,6 @@ class App(QtGui.QMainWindow):
             pg.SignalProxy(self.plt[count].scene().sigMouseMoved, rateLimit=60,slot=self.mouseMoveEvent)
             self.plt[count].scene().sigMouseMoved.connect(self.mouseMoveEvent)
             
-            
-       
-
     def get1d_from2d(self):
         #likely will call plot_1d_fits. pg.affineSlice might be helpful here
         pass
@@ -351,7 +401,7 @@ class App(QtGui.QMainWindow):
         pass
 
     #TODO: this is currently broken, need method for adding frames to view one by one for multiple frame analysis
-    # See pyqtgraph examples for help on this
+    # See pyqtgraph examples for help on this. Can easily accomplish this with current structure, but not interesting now
     #NOTE: for analysis of 2D spectra there exists a fitting algorithm with astropy (astropy.modeling.(fitting,models))
     # it seems to be good for analysis of flat frams
     def show_2d_fits(self,fileName = ""):
@@ -393,6 +443,29 @@ class App(QtGui.QMainWindow):
                 msg = qt.QMessageBox()
                 msg.setText('Please choose Y or N')
                 told = msg.exec_()
+    
+    def updateLRplot(self):
+        self.regPlot[len(self.regPlot)-1].setXRange(*self.lrs[len(self.lrs)-1].getRegion(),padding=0)
+        self.regPlot[len(self.regPlot)-1].setYRange(self.yrange[0],self.yrange[1],padding=0)
+
+    def whichPlot(self):
+        choice, ok = qt.QInputDialog.getItem(self,"Adding region","Which plot?:",np.arange(len(self.plt),dtype=str),0,False)
+        self.addLinearRegion(int(choice))
+
+    def addLinearRegion(self,chosen):
+        #NOTE:is there a means to extend the length of a list without changing its elements?
+        xlen = self.plt[chosen].getViewBox().viewRange()[0]#first element is the bounds of the x-axis data
+        #TODO: the logic here is not great as it doesn't delineate linear regions of different plots
+        #Need to set linear regions as children of plots (in some sense)
+        self.lrs.append(pg.LinearRegionItem(xlen))
+        count = len(self.lrs)
+        self.plt[chosen].addItem(self.lrs[count-1])
+        abdata = self.plt[chosen].listDataItems()
+        data = (abdata[0].getData()[0],abdata[0].getData()[1],abdata[1].getData()[1])
+        self.addRegionPlot(data)
+
+        self.lrs[len(self.lrs)-1].sigRegionChanged.connect(self.updateLRplot)
+        
     #TODO: Error results seem unphysical. Method for grabbing instrument uncertainties?
     def fitting_1d(self):
         #calling specutils or some MCMC routine (perhaps emcee)
@@ -401,7 +474,7 @@ class App(QtGui.QMainWindow):
         This will take in user input on the location of some peak and then fit a gaussian to that peak.
         """
         #TODO: Need to propogate errors from continuum fit
-
+        
         if self.ewBut.isChecked():
             self.plot_view.setCursor(self.Lcursor)
             self.is1dPos = True
@@ -432,7 +505,9 @@ class App(QtGui.QMainWindow):
                         else:
                             qt.QMessageBox.about(self,"Done","Exiting without fit")
                             return
-
+                        #TODO: in order to get full uncertainty of given quantity, need to define
+                        #prior probability as the distribution of the continuum 
+                        # (which has its own prior of course)
                         normflux = flux/continuum
                         mask = (wl > self.ewBounds[0]) & (wl < self.ewBounds[1])
                         finalflux = normflux[mask]
@@ -465,127 +540,112 @@ class App(QtGui.QMainWindow):
                 else:
                     qt.QMessageBox.about(self,"No data on screen","Not fitting")
                         
-        
-    #TODO: Need to track and remove plots, perhaps on user request
-    #TODO: Need to propagate errors to any other fits (How to do this?)
+    #TODO: Need to propagate errors to any other fits (How to do this?) use total prob distribution
+    # of continuum as prior probability for other fits
     def Cont_Fit(self):
         """
         This will ask for a wavelength range from the user. A continuum will be fit
         to the flux data with consideration of the error spectrum. Should also consider setting up
         a list of masks to the data to use for continuum fitting
         """
-        #TODO: Program crashes if no points are chosen, need to have a handler for this that informs the user
-        self.isMask = True
-        #self.Mcount, ok = qt.QInputDialog.getInt(self,"","How many masks?")
-        if self.contBut.isChecked():
-            self.plot_view.setCursor(self.Lcursor)#Setting cursor image
-            Pos(self,self.plot_view)
-        if not(self.contBut.isChecked()):
-            self.isMask = False
-            self.count = 0
-            self.plot_view.setCursor(QtCore.Qt.CursorShape(2))
-            self.plot_view.scene().sigMouseClicked.disconnect()
-            data = self.plot_view.listDataItems()
-            #geting data for fitting continuum and plotting chosen points
-            if(len(data) > 0):
-                boolMask = [len(self.Mask[i]) == 2 for i in range(len(self.Mask))]
-                if (self.Mask) and np.all(boolMask):
-                    data = [data[0].getData(),data[1].getData()]
-                    trange = self.plot_view.viewRange()
-                    yrange = trange[1]
-                    holdToRemove = []
-                    fmask = []
-                    for i in range(len(self.Mask)):
-                        line_data = [[self.Mask[i][0],self.Mask[i][0]],[yrange[0],yrange[1]]]
-                        rine_data = [[self.Mask[i][1],self.Mask[i][1]],[yrange[0],yrange[1]]]
-                        b = pg.PlotDataItem(x=line_data[0],y=line_data[1],pen='b')
-                        r = pg.PlotDataItem(x=rine_data[0],y=rine_data[1],pen='r')#symbol is another argument, best for scatterplotitem
-                        self.plot_view.addItem(b)
-                        self.plot_view.addItem(r)
-                        holdToRemove.append(b) #used to remove these lines if you do not perform the fit
-                        holdToRemove.append(r)
-                        fmask.append((data[0][0] > self.Mask[i][0]) & (data[0][0] < self.Mask[i][1]))
-                        
-                else:
-                    qt.QMessageBox.about(self,"No choice", "No bounds chosen or Not an even number of bounds: #bounds = {}, not fitting".format(boolMask))
-                    self.Mask = []
-                    #TODO: make sure that all plotted bounds are deleted in this process
-                    return
-                
+        #TODO: must ask 2 questions. 1: which plot? 2:which linear region?
+        # 1 gives the data to be analyzed, 2 gives the masking region (multiple regions?)
+        choice, ok = qt.QInputDialog.getItem(self,"Removing 1d?","Which plot?:",self.names1d,0,False)
+        choice, ok = qt.QInputDialog.getItem(self,"Removing 1d?","Which plot?:",self.names1d,0,False)
+        
+        data = self.plt[choice].listDataItems()
+        mask = 0
+        #geting data for fitting continuum and plotting chosen points
+        if(len(data) > 0):
+            boolMask = [len(self.Mask[i]) == 2 for i in range(len(self.Mask))]
+            if (self.Mask) and np.all(boolMask):
+                data = [data[0].getData(),data[1].getData()]
+                trange = self.plot_view.viewRange()
+                yrange = trange[1]
+                holdToRemove = []
+                fmask = []
+                for i in range(len(self.Mask)):
+                    line_data = [[self.Mask[i][0],self.Mask[i][0]],[yrange[0],yrange[1]]]
+                    rine_data = [[self.Mask[i][1],self.Mask[i][1]],[yrange[0],yrange[1]]]
+                    b = pg.PlotDataItem(x=line_data[0],y=line_data[1],pen='b')
+                    r = pg.PlotDataItem(x=rine_data[0],y=rine_data[1],pen='r')#symbol is another argument, best for scatterplotitem
+                    self.plot_view.addItem(b)
+                    self.plot_view.addItem(r)
+                    holdToRemove.append(b) #used to remove these lines if you do not perform the fit
+                    holdToRemove.append(r)
+                    fmask.append((data[0][0] > self.Mask[i][0]) & (data[0][0] < self.Mask[i][1]))
+                    
             else:
-                qt.QMessageBox.about(self,"No Data","No data to fit to!")
+                qt.QMessageBox.about(self,"No choice", "No bounds chosen or Not an even number of bounds: #bounds = {}, not fitting".format(boolMask))
                 self.Mask = []
+                #TODO: make sure that all plotted bounds are deleted in this process
                 return
-            if(len(fmask)>1):fmask = [fmask[i]|fmask[i+1] for i in range(len(fmask) - 1)]
-            print(fmask)
-            flux = data[0][1][fmask]
-            wl = data[0][0][fmask]
-            err = data[1][1][fmask]#TODO: Check data type of fmask
-            #Seems like all that needs to be done is to change fmask -> tuple(fmask)?
-            '''
-            FutureWarning: Using a non-tuple sequence for 
-            multidimensional indexing is deprecated; use `arr[tuple(seq)]` instead of `arr[seq]`. 
-            In the future this will be interpreted as an array index, `arr[np.array(seq)]`, 
-            which will result either in an error or a different result.
-            err = data[1][1][fmask]
-            '''
-   
-            Ans = qt.QMessageBox.question(self,"Masking","Mask Emission and Absorption lines?",qt.QMessageBox.Yes|qt.QMessageBox.No,qt.QMessageBox.No)
-
-
-            if Ans==qt.QMessageBox.Yes:
-                z, ok = qt.QInputDialog.getDouble(self,"Get redshift","z:",2.0,0.0,10.0,10)
-                if ok:
-                    wlCIV = 1550*(1+z)
-                    wlHeII = 1640*(1+z)#TODO: re-impliment using list of lines instead
-                    c = 3e5 #km/s
-                    v = c*(wl-wlCIV)/wlCIV
-                    CIVMask = (v > -1000) & (v < 400)
-                    HeIIMask = (c*(wl-wlHeII)/wlHeII > -400) & (c*(wl-wlHeII)/wlHeII < 400)
-                    TotMask = CIVMask | HeIIMask
-                    x = wl[TotMask]
-                    y = flux[TotMask]
-                    CIVscatter = pg.ScatterPlotItem(x=x,y=y,pen=pg.mkPen('g'),brush=pg.mkBrush('g'))
-                    self.plot_view.addItem(CIVscatter)
-                    wl = wl[~TotMask]#~ is bitwise NOT which is how we mask in python
-                    flux = flux[~TotMask]
-                    err = err[~TotMask]
-            else:
-                qt.QMessageBox.about(self,"No Mask","Continuing fit with all data in bounds")
-
-            items = ('Power Law','Linear','Polynomial')
-            func, ok = qt.QInputDialog.getItem(self,"Get function","Function: ",items,0,False)
-            if func == 'Power Law' and ok:
-                #TODO: Force left bound as "centroid" in Pow?
-                self.Fitter(fxn.Pow,data,flux,err,wl,[(np.min(flux),np.max(flux)),(-3,1),(np.min(wl),np.max(wl))],name='continuum')
-                self.cname = 'pl'
-                self.contfit[1].append('pl')
-            if func == 'Linear' and ok:
-                self.line = partial(fxn.linear,b=self.Mask[0][0])
-                self.Fitter(self.line,data,flux,err,wl,[(np.min(flux),np.max(flux)),(np.min(flux)/np.max(wl),np.max(flux)/np.min(wl))],name='continuum')
-                #TODO: is the slope range reasonable?
-                self.cname = 'l'
-                self.contfit[1].append('l')
-            if func == 'Polynomial' and ok:
-                order, check = qt.QInputDialog.getInt(self,"Polynomial","What Order?:",0,False)
-                if check:
-                    self.cname = 'p'
-                    self.contfit[1].append('p')
-                    guess = []
-                    guess.append((np.min(flux),np.max(flux)))
-                    for i in range(order):
-                        guess.append(((np.min(flux)/np.max(wl))**(i+1),(np.max(flux)/np.min(wl)**(i+1))))
-
-                    self.Fitter(fxn.polynomial,data,flux,err,wl,guess,name='continuum')
-            if not(ok):#TODO: consider using else, this is kind of weird coding
-                qt.QMessageBox.about(self,"Continuum","Not fitting continuum")
-                self.Mask = []
-                for i in holdToRemove:
-                    self.plot_view.removeItem(i)
                 
+        else:
+            qt.QMessageBox.about(self,"No Data","No data to fit to!")
+            return
+        if(len(fmask)>1):fmask = [fmask[i]|fmask[i+1] for i in range(len(fmask) - 1)]
+        print(fmask)
+        flux = data[0][1][fmask]
+        wl = data[0][0][fmask]
+        err = data[1][1][fmask]#TODO: Check data type of fmask
+        #Seems like all that needs to be done is to change fmask -> tuple(fmask)?
+        '''
+        FutureWarning: Using a non-tuple sequence for 
+        multidimensional indexing is deprecated; use `arr[tuple(seq)]` instead of `arr[seq]`. 
+        In the future this will be interpreted as an array index, `arr[np.array(seq)]`, 
+        which will result either in an error or a different result.
+        err = data[1][1][fmask]
+        '''
+        
+        Ans = qt.QMessageBox.question(self,"Masking","Mask Emission and Absorption lines?",qt.QMessageBox.Yes|qt.QMessageBox.No,qt.QMessageBox.No)
+
+
+        if Ans==qt.QMessageBox.Yes:
+            z, ok = qt.QInputDialog.getDouble(self,"Get redshift","z:",2.0,0.0,10.0,10)
+            if ok:
+                wlCIV = 1550*(1+z)
+                wlHeII = 1640*(1+z)#TODO: re-impliment using list of lines instead
+                c = 3e5 #km/s
+                v = c*(wl-wlCIV)/wlCIV
+                CIVMask = (v > -1000) & (v < 400)
+                HeIIMask = (c*(wl-wlHeII)/wlHeII > -400) & (c*(wl-wlHeII)/wlHeII < 400)
+                TotMask = CIVMask | HeIIMask
+                x = wl[TotMask]
+                y = flux[TotMask]
+                CIVscatter = pg.ScatterPlotItem(x=x,y=y,pen=pg.mkPen('g'),brush=pg.mkBrush('g'))
+                self.plot_view.addItem(CIVscatter)
+                wl = wl[~TotMask]#~ is bitwise NOT which is how we mask in python
+                flux = flux[~TotMask]
+                err = err[~TotMask]
+        else:
+            qt.QMessageBox.about(self,"No Mask","Continuing fit with all data in bounds")
+        items = ('Power Law','Linear','Polynomial')
+        func, ok = qt.QInputDialog.getItem(self,"Get function","Function: ",items,0,False)
+        if func == 'Power Law' and ok:
+            #TODO: Force left bound as "centroid" in Pow?
+            self.Fitter(fxn.Pow,data,flux,err,wl,[(np.min(flux),np.max(flux)),(-3,1),(np.min(wl),np.max(wl))],name='continuum')
+            self.cname = 'pl'
+            self.contfit[1].append('pl')
+        if func == 'Linear' and ok:
+            self.line = partial(fxn.linear,b=self.Mask[0][0])
+            self.Fitter(self.line,data,flux,err,wl,[(np.min(flux),np.max(flux)),(np.min(flux)/np.max(wl),np.max(flux)/np.min(wl))],name='continuum')
+            #TODO: is the slope range reasonable?
+            self.cname = 'l'
+            self.contfit[1].append('l')
+        if func == 'Polynomial' and ok:
+            order, check = qt.QInputDialog.getInt(self,"Polynomial","What Order?:",0,False)
+            if check:
+                self.cname = 'p'
+                self.contfit[1].append('p')
+                guess = []
+                guess.append((np.min(flux),np.max(flux)))
+                for i in range(order):
+                    guess.append(((np.min(flux)/np.max(wl))**(i+1),(np.max(flux)/np.min(wl)**(i+1))))
+                self.Fitter(fxn.polynomial,data,flux,err,wl,guess,name='continuum')
+        if not(ok):#TODO: consider using else, this is kind of weird coding
+            qt.QMessageBox.about(self,"Continuum","Not fitting continuum")
                 
-                
-            self.Mask = []
         return
         
     

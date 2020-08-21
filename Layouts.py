@@ -18,3 +18,5 @@ def Lay(self):
         self.dtool.addWidget(self.EcolorBut)
         self.dtool.addWidget(self.contBut)
         self.dtool.addWidget(self.getFitsBut)
+        self.dtool.addWidget(self.addReg)
+        self.dtool.addWidget(self.remReg)
