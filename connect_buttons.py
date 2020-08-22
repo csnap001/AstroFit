@@ -17,7 +17,9 @@ def connect(self):
         self.tbl.clicked.connect(self.fileTab)
         self.Dcolorbut.clicked.connect(self.set1dFluxCol)
         self.EcolorBut.clicked.connect(self.set1dErrCol)
-        self.ewBut.clicked[bool].connect(self.fitting_1d)#TODO: change this
+        self.ewBut.clicked.connect(self.fitting_1d)
+        #TODO: add non-parameterized EW button
+        #TODO: need to add in line center code (No parameterization, so should be "easy")
         self.contBut.clicked.connect(self.Cont_Fit)
         self.getFitsBut.clicked.connect(self.showPDFS)
         self.addReg.clicked.connect(self.whichPlot)

@@ -72,6 +72,7 @@ class App(QtGui.QMainWindow):
         self.lrs = []#list of linear regions for data selection (i.e. for fitting continua or EWs)
         self.regPlot = []#list to hold region plots
         self.yrange = [0,1]
+        self.prior = []#list of continuum priors that can be used
 
         self.is1d = False
         self.is2d = False
@@ -463,72 +464,71 @@ class App(QtGui.QMainWindow):
         """
         This will take in user input on the location of some peak and then fit a gaussian to that peak.
         """
-        #TODO: Need to propogate errors from continuum fit
-        
-        if self.ewBut.isChecked():
-            self.plot_view.setCursor(self.Lcursor)
-            self.is1dPos = True
-            Pos(self,self.plot_view)
-        if not(self.ewBut.isChecked()):
-            if(not(self.xpos == None)):
-                #TODO: getting continuum choice from user. How to name these?
-                # also need to remove all continua once a new plot is loaded
-                data = self.plot_view.listDataItems()
-                if len(data) > 0:
-                    data = [data[0].getData(),data[1].getData()]
-                    wl = data[0][0]
-                    flux = data[0][1]
-                    err = data[1][1]
-                   
-                    if len(self.contfit[0]) > 0:
-                        #these assume that contfit is NOT an array of arrays, which it is if multiple continua exist
-                        items = ("{}".format(i) for i in range(len(self.contfit[0])))
-                        cont, ok = qt.QInputDialog.getItem(self,"Continuum","Which Continuum?:",items,0,False)
-                        self.fit = self.contfit[0][int(cont)]
-                        self.cname = self.contfit[1][int(cont)]
-                        if self.cname == 'pl' and ok:
-                            continuum = fxn.Pow(wl,*self.fit)
-                        elif self.cname == 'l' and ok:
-                            continuum = self.line(wl,*self.fit)
-                        elif self.cname == 'p' and ok:
-                            continuum = fxn.polynomial(wl,*self.fit)
-                        else:
-                            qt.QMessageBox.about(self,"Done","Exiting without fit")
-                            return
-                        #TODO: in order to get full uncertainty of given quantity, need to define
-                        #prior probability as the distribution of the continuum 
-                        # (which has its own prior of course)
-                        normflux = flux/continuum
-                        mask = (wl > self.ewBounds[0]) & (wl < self.ewBounds[1])
-                        finalflux = normflux[mask]
-                        finalwl = wl[mask]
-                        finalerr = err[mask]/continuum[mask]
-                        #TODO: Need to propogate errors more appropriately. 
-                        # perhaps have code block that uses all values of MCMC simualtion
-                        # and grab the sd from there? 
-                        index = np.where(finalflux == np.max(finalflux))
-                        peakWl = finalwl[index]
-                        peakFl = finalflux[index]
+        #TODO: Need to propogate errors from continuum fit, use full continuum pdf
+        #TODO: here we need to first ask for which plot/dataset, then which continuum, and then which region
+        choice, ok = qt.QInputDialog.getItem(self,"Which to fit","Choose data set:",self.names1d,0,False)
+        if not(ok):
+            qt.QMessageBox.about(self,"Not Fitting","Chose no data, not fitting.")
+            return
+        dat_choice = self.names1d.index(choice)
+        data = self.plt[dat_choice].listDataItems()
 
-                        
+        check = [self.regPlot[i].getViewBox().viewRange()[0][0] for i in np.arange(len(self.regPlot))]
+        reg, ok = qt.QInputDialog.getItem(self,"Choose a region","Which plot?:",np.array(check,str),0,False)#TODO: allow for multiple regions? or only abs masking?
+        if not(ok):
+            qt.QMessageBox.about(self,"Not Fitting","Do not currently support no region choice")
+            return
+        mask_choice = check.index(float(reg))
+        lr = self.lrs[mask_choice].getRegion()
 
-                        centB = (self.xpos - 0.05*self.xpos,self.xpos + 0.05*self.xpos)
-                        self.plot_view.plot([centB[0],centB[0]],[0,self.ypos],pen = 'c')
-                        self.plot_view.plot([centB[1],centB[1]],[0,self.ypos],pen='m')
-                        zcent = np.round((peakWl - 1215.67)/1215.67,6) #specific to lyman alpha
-                        #TODO: Need to add choice for which line is being fit, or an arbitrary position
-                        #TODO: is np.round necessary?
-                        zB = ((zcent - 0.2*zcent), (zcent + 0.2*zcent))#TODO:Is this too constraining?
-                        zB = (zB[0][0],zB[1][0])#necessary b/c zB is created as array of arrays and numpy fails with array inputs
-                        sigB = (0.001*(self.ewBounds[1] - self.ewBounds[0]), 0.2*(self.ewBounds[1]-self.ewBounds[0]))#TODO: Probably not best choice for bounds
-                        ampB = (peakFl - 0.2*peakFl,peakFl + 0.2*peakFl) #TODO: is peak too tightly constrained?
-                        ampB = (ampB[0][0],ampB[1][0])#same as zB
 
-                        self.Fitter(fxn.Lyalph,data,finalflux,finalerr,finalwl,[ampB,zB,sigB],name='EW')
-                    else:
-                        qt.QMessageBox.about(self,"Warning!","No continua available! First fit continuum")
+        if len(data) > 0:
+            wl = data[0].getData()[0]
+            flux = data[0].getData()[1]
+            err = data[1].getData()[1]
+           
+            if len(self.contfit[0]) > 0:
+                #these assume that contfit is NOT an array of arrays, which it is if multiple continua exist
+                items = ("{}".format(i) for i in range(len(self.contfit[0])))
+                cont, ok = qt.QInputDialog.getItem(self,"Continuum","Which Continuum?:",items,0,False)
+                self.fit = self.contfit[0][int(cont)]
+                self.cname = self.contfit[1][int(cont)]
+                if self.cname == 'pl' and ok:
+                    continuum = fxn.Pow(wl,*self.fit)
+                elif self.cname == 'l' and ok:
+                    continuum = self.line(wl,*self.fit)
+                elif self.cname == 'p' and ok:
+                    continuum = fxn.polynomial(wl,*self.fit)
                 else:
-                    qt.QMessageBox.about(self,"No data on screen","Not fitting")
+                    qt.QMessageBox.about(self,"Done","Exiting without fit")
+                    return
+                #TODO: in order to get full uncertainty of given quantity, need to define
+                #prior probability as the distribution of the continuum 
+                # (which has its own prior of course)
+                normflux = flux/continuum
+                mask = (wl > lr[0]) & (wl < lr[1])
+                finalflux = normflux[mask]
+                finalwl = wl[mask]
+                finalerr = err[mask]/continuum[mask]
+                #TODO: Need to propogate errors more appropriately. Use P(A and B) = P(A|B)*P(B), with P(B) = P(continuum) 
+                index = np.where(finalflux == np.max(finalflux))
+                peakWl = finalwl[index]
+                peakFl = finalflux[index]
+            
+                #TODO:add ability to choose other emission lines (perhaps arbitrary as well)
+                zcent = np.round((peakWl - 1215.67)/1215.67,6) #specific to lyman alpha
+                #TODO: Need to add choice for which line is being fit, or an arbitrary position
+                #TODO: is np.round necessary?
+                zB = ((zcent - 0.2*zcent), (zcent + 0.2*zcent))#TODO:Is this too constraining?
+                zB = (zB[0][0],zB[1][0])#necessary b/c zB is created as array of arrays and numpy fails with array inputs
+                sigB = (0.001*(lr[1] - lr[0]), 0.2*(lr[1]-lr[0]))#TODO: Probably not best choice for bounds
+                ampB = (peakFl - 0.2*peakFl,peakFl + 0.2*peakFl) #TODO: is peak too tightly constrained?
+                ampB = (ampB[0][0],ampB[1][0])#same as z
+                self.Fitter(fxn.Lyalph,data,finalflux,finalerr,finalwl,[ampB,zB,sigB],name='EW',plt_name=dat_choice)
+            else:
+                qt.QMessageBox.about(self,"Warning!","No continua available! First fit continuum")
+        else:
+            qt.QMessageBox.about(self,"No data on screen","Not fitting")
                         
     #TODO: Need to propagate errors to any other fits (How to do this?) use total prob distribution
     # of continuum as prior probability for other fits
@@ -648,6 +648,8 @@ class App(QtGui.QMainWindow):
             if name in self.pdfs.keys():
                 name = self.cname + name #adding on extra name to differentiate continuum, won't work indefinitly
             self.pdfs[name] = (mymc[0],ps)
+            params = np.array(mymc[0])
+            #self.prior.append(func(wl,*params))
             pen = (100,90,0) # sets the color of the line, TODO: Should make this user adjustable
             cont = 1.0
         if name == 'EW':
@@ -663,11 +665,11 @@ class App(QtGui.QMainWindow):
             #This is used for GUI image such that we can see the fit
             #TODO: the whole self.fit train of thought is very kludgy, need to come up with cleaner method
             if self.cname == 'pl':
-                cont = fxn.Pow(data[0][0],*self.fit)
+                cont = fxn.Pow(data[0].getData()[0],*self.fit)
             elif self.cname == 'l':
-                cont = self.line(data[0][0],*self.fit)
+                cont = self.line(data[0].getData()[0],*self.fit)
             elif self.cname == 'p':
-                cont = fxn.polynomial(data[0][0],*self.fit)
+                cont = fxn.polynomial(data[0].getData()[0],*self.fit)
         self.fitProgress.setValue(100)    
         self.plt[plt_name].plot(data[0].getData()[0],cont*func(data[0].getData()[0],*ps),pen=pen)
 
@@ -682,6 +684,7 @@ class App(QtGui.QMainWindow):
         func, ok = qt.QInputDialog.getItem(self,"Get Fit","Which Fit?: ",self.pdfs.keys(),0,False)
 
         if ok:
+            #TODO: have the labels be more meaningful based on which pdf is being shown
             labels = ['a{}'.format(i) for i in range(len(self.pdfs[func][0]))]
             corner.corner(np.transpose(self.pdfs[func][0]),bins=250,quantiles=[0.16,0.5,0.84],show_titles=True,
                         labels=labels,verbose=True,plot_contours=True,title_fmt=".2E",truths=self.pdfs[func][1],
