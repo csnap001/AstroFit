@@ -586,7 +586,7 @@ class App(QtGui.QMainWindow):
         func, ok = qt.QInputDialog.getItem(self,"Get function","Function: ",items,0,False)
         if func == 'Power Law' and ok:
             #TODO: Force left bound as "centroid" in Pow?
-            self.Fitter(fxn.Pow,data,flux,err,wl,[(np.min(flux),np.max(flux)),(-3,1),(np.min(wl),np.max(wl))],name='continuum',plt_name=dat_choice)
+            self.Fitter(fxn.Pow,data,flux,err,wl,[(0,np.max(flux)),(-3,1),(np.min(wl),np.max(wl))],name='continuum',plt_name=dat_choice)
             self.cname = 'pl'
             self.contfit[1].append('pl')
         elif func == 'Linear' and ok:
@@ -619,7 +619,7 @@ class App(QtGui.QMainWindow):
         #TODO: Threading for progress bar? Maybe just add in self.MCMC code block?
         self.fitProgress.setValue(50)
         #TODO: Need to fix mcmc or use emcee or MULTINEST?
-        mymc = mcmc.fit(func,wl,flux,err, 7000,*bounds) #was 1000
+        mymc = mcmc.fit(func,wl,flux,err, 3000,*bounds) #was 1000
         hists = []
         ps = []
         #perc = []
