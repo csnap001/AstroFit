@@ -34,9 +34,11 @@ import Initialize_View_Widgets as IVW
 from Layouts import Lay
 from Get_Pix_Position import Pos, off
 import time
-from My_Packages import MCMC_fine_tuning as mcmc#TODO:Consider changing to pymultinest
+from My_Packages import MCMC_fine_tuning as mcmc
 from My_Packages import FuncDef as fxn
 from My_Packages import confidence as conf
+import pymc3 as pm
+import arviz as az
 import matplotlib.pyplot as plt
 from functools import partial
 import os
@@ -45,21 +47,9 @@ from IPython import embed
 
 
 class App(QtGui.QMainWindow):
-    posSignal = QtCore.pyqtSignal(list) #this must be defined as a class variable
-    XSignal = QtCore.pyqtSignal(tuple)
-    #outside of any function in order to work
+
     def __init__(self):
         super().__init__()
-        '''
-        setting images for cursors
-        '''
-        Lpm = QtGui.QPixmap('Cursor_imgs/Left_under.png')
-        Lpm = Lpm.scaled(30,30) #can use this to scale
-        #TODO: set position along left/right vertical line
-        self.Lcursor = QtGui.QCursor(Lpm) #TODO: set cursor position to corner
-        Rpm = QtGui.QPixmap('Cursor_imgs/Right_under.png')
-        Rpm = Rpm.scaled(30,30)
-        self.Rcursor = QtGui.QCursor(Rpm)
 
         self.title = "SpecFit"
         self.left = 20
@@ -108,9 +98,6 @@ class App(QtGui.QMainWindow):
         #TODO: other fits? 2d likely, but this will be done later. what about 1d?
         self.fit = []
 
-        #connects signals to functions allowing for the .emit() to cause an event
-        self.posSignal.connect(self.getPos)
-        self.XSignal.connect(self.getX)
         
 
     def initUI(self):
@@ -157,11 +144,13 @@ class App(QtGui.QMainWindow):
 
     #TODO: need to be able to update each region not just the most recent
     def updateLR(self):
-        self.lrs[len(self.lrs)-1].setRegion(self.regPlot[len(self.regPlot)-1].getViewBox().viewRange()[0])
-        abdata = self.regPlot[len(self.regPlot)-1].listDataItems()
-        data = (abdata[0].getData()[0],abdata[0].getData()[1],abdata[1].getData()[1])
-        mask = (data[0] > self.regPlot[len(self.regPlot)-1].getViewBox().viewRange()[0][0]) & (data[0] < self.regPlot[len(self.regPlot)-1].getViewBox().viewRange()[0][1])
-        if len(data[1][mask]) > 0: self.yrange = [np.min(data[1][mask]) - 0.8*np.min(data[1][mask]),1.5*np.max(data[1][mask])]
+        for i in range(len(self.lrs)):
+            if self.lrs[i].sigRegionChanged:
+                self.lrs[i].setRegion(self.regPlot[i].getViewBox().viewRange()[0])
+                abdata = self.regPlot[i].listDataItems()
+                data = (abdata[0].getData()[0],abdata[0].getData()[1],abdata[1].getData()[1])
+                mask = (data[0] > self.regPlot[i].getViewBox().viewRange()[0][0]) & (data[0] < self.regPlot[i].getViewBox().viewRange()[0][1])
+                if len(data[1][mask]) > 0: self.yrange = [np.min(data[1][mask]) - 0.8*np.min(data[1][mask]),1.5*np.max(data[1][mask])]
 
     def addRegionPlot(self,data):
         num = len(self.regPlot)
@@ -393,6 +382,7 @@ class App(QtGui.QMainWindow):
 
     #TODO: this is currently broken, need method for adding frames to view one by one for multiple frame analysis
     # See pyqtgraph examples for help on this. Can easily accomplish this with current structure, but not interesting now
+    # using docking
     #NOTE: for analysis of 2D spectra there exists a fitting algorithm with astropy (astropy.modeling.(fitting,models))
     # it seems to be good for analysis of flat frams
     def show_2d_fits(self,fileName = ""):
@@ -436,8 +426,10 @@ class App(QtGui.QMainWindow):
                 told = msg.exec_()
     
     def updateLRplot(self):
-        self.regPlot[len(self.regPlot)-1].setXRange(*self.lrs[len(self.lrs)-1].getRegion(),padding=0)
-        self.regPlot[len(self.regPlot)-1].setYRange(self.yrange[0],self.yrange[1],padding=0)
+        for i in range(len(self.regPlot)):
+            if self.lrs[i].sigRegionChanged:
+                self.regPlot[i].setXRange(*self.lrs[i].getRegion(),padding=0)
+                self.regPlot[i].setYRange(self.yrange[0],self.yrange[1],padding=0)
 
     def whichPlot(self):
         choice, ok = qt.QInputDialog.getItem(self,"Adding region","Which plot?:",np.arange(len(self.plt),dtype=str),0,False)
@@ -721,78 +713,7 @@ class App(QtGui.QMainWindow):
     def imgDiv(self):
         pass
 
-    count = 0    
-    def onClick(self,event):
-        pos = event.scenePos()
-        vb = self.plot_view.getViewBox()
-        if self.is1dPos:
             
-            
-            if self.count == 0:
-                self.plot_view.setCursor(self.Rcursor)
-                self.Lbound = vb.mapSceneToView(pos).x()
-                
-                
-            if self.count == 1:
-                self.plot_view.setCursor(QtCore.Qt.CursorShape(2))
-                self.Rbound = vb.mapSceneToView(pos).x()
-                
-            if self.count == 2:
-                self.plot_view.scene().sigMouseClicked.disconnect()
-                self.ewBut.toggle()
-                self.is1dPos = False #this is necessary b/c otherwise this piece of
-                #code will be called again when pressing other buttons since it will
-                #still be true
-                x = vb.mapSceneToView(pos).x()#grabs x position relative to axes
-                y = vb.mapSceneToView(pos).y()#grabs y position relative to axes
-                self.posSignal.emit([x,y,self.Lbound,self.Rbound])
-                self.count = 0
-                return
-            self.count += 1
-        if self.is2dPos:
-            pass
-            #do something with 2d
-        if self.isMask:#Continuum bounding
-            #TODO: if multiple left and right bounds are chosen and then
-            # the fitting is canceled, only the most recent plot is removed
-            # need to remove all masks that were chosen. TODO additionally, need
-            # a check for whether the left bound is actually to the left
-            # of the right bound
-            # TODO: Update fitting region choice by using LinearRegionItem([])?
-            if self.count == 0:
-                self.plot_view.setCursor(self.Rcursor)
-                self.xpos = vb.mapSceneToView(pos).x()
-            if self.count == 1:
-                self.plot_view.setCursor(self.Lcursor)
-                self.ypos = vb.mapSceneToView(pos).x() #TODO: is ypos named correctly?
-                self.XSignal.emit((self.xpos,self.ypos))
-                self.count = 0
-                return
-            self.count += 1
-           
-
-        
-    @QtCore.pyqtSlot(list)
-    def getPos(self,value):
-       
-        self.xpos = value[0]
-        self.ypos = value[1]
-        print(self.xpos,self.ypos)
-        self.ewBounds = (value[2],value[3])
-        self.fitting_1d()
-        
-
-    @QtCore.pyqtSlot(tuple)
-    def getX(self,value):
-        self.Mask.append(value)
-        
-        
-
-
-            
-
-
-
 if __name__ == '__main__':
     app = qt.QApplication(sys.argv)
     ex = App()
