@@ -449,7 +449,110 @@ class App(QtGui.QMainWindow):
         self.addRegionPlot(data)
 
         self.lrs[len(self.lrs)-1].sigRegionChanged.connect(self.updateLRplot)
-        
+
+    def nonParamEW(self):
+        '''
+        Module for Non-parameterized Equivalent width determination
+        '''
+
+        choice, ok = qt.QInputDialog.getItem(self,"Which to fit","Choose data set:",self.names1d,0,False)
+        if not(ok):
+            qt.QMessageBox.about(self,"Not Fitting","Chose no data, not fitting.")
+            return
+        dat_choice = self.names1d.index(choice)
+        data = self.plt[dat_choice].listDataItems()
+
+        check = [self.regPlot[i].getViewBox().viewRange()[0][0] for i in np.arange(len(self.regPlot))]
+        reg, ok = qt.QInputDialog.getItem(self,"Choose a region","Which plot?:",np.array(check,str),0,False)#TODO: allow for multiple regions? or only abs masking?
+        if not(ok):
+            qt.QMessageBox.about(self,"Not Fitting","Do not currently support no region choice")
+            return
+        mask_choice = check.index(float(reg))
+        lr = self.lrs[mask_choice].getRegion()
+
+
+        if len(data) > 0:
+            wl = data[0].getData()[0]
+            flux = data[0].getData()[1]
+            err = data[1].getData()[1]
+           
+            if len(self.contfit[0]) > 0:
+                items = ("{}".format(i) for i in range(len(self.contfit[0])))
+                cont, ok = qt.QInputDialog.getItem(self,"Continuum","Which Continuum?:",items,0,False)
+                self.fit = self.contfit[0][int(cont)]
+                self.cname = self.contfit[1][int(cont)]
+                if self.cname == 'pl' and ok:
+                    continuum = fxn.Pow(wl,*self.fit)
+                elif self.cname == 'l' and ok:
+                    continuum = self.line(wl,*self.fit)
+                elif self.cname == 'p' and ok:
+                    continuum = fxn.polynomial(wl,*self.fit)
+                else:
+                    qt.QMessageBox.about(self,"Done","Exiting without fit")
+                    return
+                #TODO: in order to get full uncertainty of given quantity, need to define
+                #prior probability as the distribution of the continuum 
+                # (which has its own prior of course)
+                normflux = flux/continuum
+                mask = (wl > lr[0]) & (wl < lr[1])
+                finalflux = normflux[mask]
+                EWflux = finalflux - 1.0
+                finalwl = wl[mask]
+                finalerr = err[mask]/continuum[mask]
+
+                #Start EW determination
+                EW = np.trapz(EWflux,x=finalwl)#TODO: why is there such a large discrepency b/t this, stark(assume this is correct), and the parameterized EW?
+                #NOTE:don't think it makes sense, but what about weighting by error?
+                EWerr = np.sqrt(np.sum(finalerr**2))#TODO: not true for non equal sub-intervals
+                #TODO: err_i = (x[i+1]-x[i])/2 * np.sqrt(finalerr[i+1]**2 + finalerr[i]**2)
+                qt.QMessageBox.about(self,"Measured","Non-Parameterized EW: {0} \xb1 {1}".format(EW,EWerr))
+            else:
+                qt.QMessageBox.about(self,"No continuum","No continuum available, not measuring")
+        else:
+            qt.QMessageBox.about(self,"No data","No data to measure")
+
+    def LineCenter(self):
+        '''
+        Module for determining line center non-parametrically
+        '''
+        choice, ok = qt.QInputDialog.getItem(self,"Which to fit","Choose data set:",self.names1d,0,False)
+        if not(ok):
+            qt.QMessageBox.about(self,"Not Fitting","Chose no data, not fitting.")
+            return
+        dat_choice = self.names1d.index(choice)
+        data = self.plt[dat_choice].listDataItems()
+
+        check = [self.regPlot[i].getViewBox().viewRange()[0][0] for i in np.arange(len(self.regPlot))]
+        reg, ok = qt.QInputDialog.getItem(self,"Choose a region","Which plot?:",np.array(check,str),0,False)#TODO: allow for multiple regions? or only abs masking?
+        if not(ok):
+            qt.QMessageBox.about(self,"Not Fitting","Do not currently support no region choice")
+            return
+        mask_choice = check.index(float(reg))
+        lr = self.lrs[mask_choice].getRegion()
+
+
+        if len(data) > 0:
+            wl = data[0].getData()[0]
+            flux = data[0].getData()[1]
+            err = data[1].getData()[1]
+           
+            #TODO: in order to get full uncertainty of given quantity, need to define
+            #prior probability as the distribution of the continuum 
+            # (which has its own prior of course)
+            mask = (wl > lr[0]) & (wl < lr[1])
+            finalflux = flux[mask]
+            finalwl = wl[mask]
+            finalerr = err[mask]
+
+            #Start Line center determination
+            Lin = np.trapz(finalflux*finalwl/finalerr**2,x=finalwl)/np.trapz(finalflux/finalerr**2,x=finalwl)
+            Linerr = np.trapz(finalflux*finalwl**2/finalerr**2,x=finalwl)/np.trapz(finalflux/finalerr**2,x=finalwl)-Lin**2
+            infline = pg.InfiniteLine(Lin,pen=(100,50,200))
+            self.plt[dat_choice].addItem(infline)
+            qt.QMessageBox.about(self,"Measured","Line center: {0} \xb1 {1}".format(Lin,Linerr))
+        else:
+            qt.QMessageBox.about(self,"No data","No data to measure")
+
     #TODO: Error results seem unphysical. Still unsure about this
     def fitting_1d(self):
         #calling specutils or some MCMC routine (perhaps emcee)
@@ -481,7 +584,6 @@ class App(QtGui.QMainWindow):
             err = data[1].getData()[1]
            
             if len(self.contfit[0]) > 0:
-                #these assume that contfit is NOT an array of arrays, which it is if multiple continua exist
                 items = ("{}".format(i) for i in range(len(self.contfit[0])))
                 cont, ok = qt.QInputDialog.getItem(self,"Continuum","Which Continuum?:",items,0,False)
                 self.fit = self.contfit[0][int(cont)]
@@ -642,7 +744,7 @@ class App(QtGui.QMainWindow):
 
             #Likelihood of sampling distribution
             Y_obs = pm.Normal("Y_obs",mu=mu,sigma=err.astype(np.float32),observed=flux.astype(np.float32))
-            trace = pm.sample(5000,tune=5000,target_accept=0.85,cores=6)
+            trace = pm.sample(5000,tune=5000,target_accept=0.85,cores=2)
             vals = az.summary(trace,round_to=2)#NOTE: vals['mean'].keys() gives the parameter names
             samples = pm.trace_to_dataframe(trace,varnames=vals['mean'].keys())
             #embed()

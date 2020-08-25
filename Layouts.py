@@ -20,3 +20,5 @@ def Lay(self):
         self.dtool.addWidget(self.getFitsBut)
         self.dtool.addWidget(self.addReg)
         self.dtool.addWidget(self.remReg)
+        self.dtool.addWidget(self.nonPEW,row=1,col=2)
+        self.dtool.addWidget(self.lincent,row=2,col=2)

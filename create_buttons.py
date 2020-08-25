@@ -17,6 +17,8 @@ def buttons(self):
         self.remReg = qt.QPushButton("Remove region",self)
         self.tbl = qt.QPushButton("Fits table",self)
         self.ewBut = qt.QPushButton("EW",self)
+        self.nonPEW = qt.QPushButton("None parameterized EW",self)
+        self.lincent = qt.QPushButton("Line center",self)
         self.addImgbut = qt.QPushButton("Add Images",self)
         self.Dcolorbut = qt.QPushButton("Data color",self)
         self.EcolorBut = qt.QPushButton("Err color", self)

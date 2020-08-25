@@ -18,8 +18,8 @@ def connect(self):
         self.Dcolorbut.clicked.connect(self.set1dFluxCol)
         self.EcolorBut.clicked.connect(self.set1dErrCol)
         self.ewBut.clicked.connect(self.fitting_1d)
-        #TODO: add non-parameterized EW button
-        #TODO: need to add in line center code (No parameterization, so should be "easy")
+        self.nonPEW.clicked.connect(self.nonParamEW)
+        self.lincent.clicked.connect(self.LineCenter)
         self.contBut.clicked.connect(self.Cont_Fit)
         self.getFitsBut.clicked.connect(self.showPDFS)
         self.addReg.clicked.connect(self.whichPlot)
