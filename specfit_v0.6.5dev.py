@@ -664,7 +664,7 @@ class App(QtGui.QMainWindow):
             self.pdfs[name] = (samples,vals['mean'])
             ewPdf = np.sqrt(2*np.pi)*np.array(samples['amp'])*np.array(samples['sigma'])#TODO: multiply by "prior" which is the full continuum pdf
             ewMeas = np.sqrt(2*np.pi)*vals['mean']['amp']*vals['mean']['sigma']
-            self.pdfs['EWPDF'] = [ewPdf,pd.DataFrame(data=np.array([ewMeas]),index=["EW"])]#TODO: need to figure out the data type that fits with showing pdfs
+            self.pdfs['EWPDF'] = [ewPdf,pd.core.series.Series([ewMeas],index=["EW"])]
             pen = (0,100,0)
             #This is used for GUI image such that we can see the fit
             #TODO: the whole self.fit train of thought is very kludgy, need to come up with cleaner method
