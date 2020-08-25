@@ -2,12 +2,12 @@
 Created Thursday 8th, 2019 by Christopher Snapp-Kolas
 
 TODO: Rename the file so that it better describes its use.
-TODO: Should there be a toolbar?
-TODO: comment all code for easier readability
 TODO: add "clear screen" option for clearing displays
 TODO: Add threading of functions to allow continued functionality of other QtGui objects
 TODO: Add progress bar for fits: self.progress = QtGui.ProgressBar(self) -> self.progress.setValue(**some increasing number**)
-TODO: Rework Gui using Pyqtgraph examples in site-packages within python, These seem more powerful
+TODO: 2 primary functions need to be built. 1: need non-parameterized equivalent width determination
+2: Need line center determination. use paper that fred sent (find the first moment)
+generally speaking there is more to be done than this, but this will be sufficient for now
 
 Module for GUI spectroscopic fitting environment based on specutils
 and astropy. (Possibly, desired) This module will also have basic image arithmatic capabilities.
@@ -450,7 +450,7 @@ class App(QtGui.QMainWindow):
 
         self.lrs[len(self.lrs)-1].sigRegionChanged.connect(self.updateLRplot)
         
-    #TODO: Error results seem unphysical. Method for grabbing instrument uncertainties?
+    #TODO: Error results seem unphysical. Still unsure about this
     def fitting_1d(self):
         #calling specutils or some MCMC routine (perhaps emcee)
         #TODO: rename to parameterEW or something along these lines to distinguish from brute force integration method
@@ -688,7 +688,7 @@ class App(QtGui.QMainWindow):
         if ok:
             labels = self.pdfs[func][1].keys()
             corner.corner(self.pdfs[func][0],bins=250,quantiles=[0.16,0.5,0.84],show_titles=True,
-                        labels=labels,verbose=True,plot_contours=True,title_fmt=".2E",truths=self.pdfs[func][1],
+                        labels=labels,verbose=True,plot_contours=True,title_fmt=".3E",truths=self.pdfs[func][1],
                         levels=(0.68,)) #must be (values, # of parameters), (i.e. (365,4) corresponds to a fit with four parameters)
             plt.show()
                 
