@@ -21,6 +21,7 @@ Class Functions:
 import PyQt5.QtWidgets as qt
 from pyqtgraph.Qt import QtCore,QtGui
 import pyqtgraph as pg
+import pandas as pd
 from astropy.io import fits
 from astropy.table import Table
 from astropy import units as u
@@ -511,12 +512,12 @@ class App(QtGui.QMainWindow):
                 zcent = np.round((peakWl - 1215.67)/1215.67,6) #specific to lyman alpha
                 #TODO: Need to add choice for which line is being fit, or an arbitrary position
                 #TODO: is np.round necessary?
-                zB = ((zcent - 0.2*zcent), (zcent + 0.2*zcent))#TODO:Is this too constraining?
+                zB = ((peakWl - 0.2*peakWl), (peakWl + 0.2*peakWl))#TODO:Is this too constraining?
                 zB = (zB[0][0],zB[1][0])#necessary b/c zB is created as array of arrays and numpy fails with array inputs
-                sigB = (0.001*(lr[1] - lr[0]), 0.2*(lr[1]-lr[0]))#TODO: Probably not best choice for bounds
-                ampB = (peakFl - 0.2*peakFl,peakFl + 0.2*peakFl) #TODO: is peak too tightly constrained?
-                ampB = (ampB[0][0],ampB[1][0])#same as z
-                self.Fitter(fxn.Lyalph,data,finalflux,finalerr,finalwl,[ampB,zB,sigB],name='EW',plt_name=dat_choice)
+                sigB = (0.01, 15)
+                ampB = (0,peakFl + 0.2*peakFl) #TODO: is peak too tightly constrained?
+                ampB = (ampB[0],ampB[1][0])#same as z
+                self.Fitter(fxn.gauss,data,finalflux,finalerr,finalwl,[ampB,zB,sigB],name='EW',plt_name=dat_choice)
             else:
                 qt.QMessageBox.about(self,"Warning!","No continua available! First fit continuum")
         else:
@@ -578,12 +579,12 @@ class App(QtGui.QMainWindow):
         func, ok = qt.QInputDialog.getItem(self,"Get function","Function: ",items,0,False)
         if func == 'Power Law' and ok:
             #TODO: Force left bound as "centroid" in Pow?
-            self.Fitter(fxn.Pow,data,flux,err,wl,[(0,np.max(flux)),(-3,1),(np.min(wl),np.max(wl))],name='continuum',plt_name=dat_choice)
+            self.Fitter(fxn.Pow,data,flux,err,wl,[(0,np.max(flux)),(-3,1),(np.min(wl),np.max(wl))],name='continuum',plt_name=dat_choice,cname=func)
             self.cname = 'pl'
             self.contfit[1].append('pl')
         elif func == 'Linear' and ok:
             self.line = partial(fxn.linear,b=lr[0])
-            self.Fitter(self.line,data,flux,err,wl,[(np.min(flux),np.max(flux)),(np.min(flux)/np.max(wl),np.max(flux)/np.min(wl))],name='continuum',plt_name=dat_choice)
+            self.Fitter(self.line,data,flux,err,wl,[(np.min(flux),np.max(flux)),(np.min(flux)/np.max(wl),np.max(flux)/np.min(wl))],name='continuum',plt_name=dat_choice,cname=func)
             #TODO: is the slope range reasonable?
             self.cname = 'l'
             self.contfit[1].append('l')
@@ -596,7 +597,7 @@ class App(QtGui.QMainWindow):
                 guess.append((np.min(flux),np.max(flux)))
                 for i in range(order):
                     guess.append(((np.min(flux)/np.max(wl))**(i+1),(np.max(flux)/np.min(wl)**(i+1))))
-                self.Fitter(fxn.polynomial,data,flux,err,wl,guess,name='continuum',plt_name=dat_choice)
+                self.Fitter(fxn.polynomial,data,flux,err,wl,guess,name='continuum',plt_name=dat_choice,cname=func,order=order)
         else:#TODO: consider using else, this is kind of weird coding
             qt.QMessageBox.about(self,"Continuum","Not fitting continuum")
         
@@ -604,56 +605,67 @@ class App(QtGui.QMainWindow):
         return
         
     
-    def Fitter(self,func,data,flux,err,wl,bounds,name = '',plt_name=None):
+    def Fitter(self,func,data,flux,err,wl,bounds,name = '',plt_name=None,cname=None,order=None):
         '''
         helper function for fitting algorithms (cont_fit, and ew)
         '''
         #TODO: Threading for progress bar? Maybe just add in self.MCMC code block?
-        self.fitProgress.setValue(50)
         #TODO: Need to fix mcmc or use emcee or MULTINEST?
-        mymc = mcmc.fit(func,wl,flux,err, 3000,*bounds) #was 1000
-        hists = []
-        ps = []
-        #perc = []
-        test = []
-  
 
-        self.fitProgress.setValue(75)
-        for i in range(len(mymc[0])):
-            #perc.append(np.percentile(mymc[0][i],[16,50,84]))
-            hists.append(np.histogram(mymc[0][i],bins = 250)) 
-            test.append(np.where(hists[i][0] == np.max(hists[i][0])))#TODO: Is this the best fit? should devise an algorithm that determines best fit given cross correlations
-            '''
-            if(np.max(hists[i][0]) >= 8*np.mean(hists[i][0])):#For distributions that are essentially "Noise" it seems best to simply take the mean value
-                ps.append(hists[i][1][test[i]])
-            else:
-            '''
-            ps.append(np.percentile(mymc[0][i],50))#WARNING: just taking mean value, may not always be best
+        #mymc = mcmc.fit(func,wl,flux,err, 3000,*bounds) #was 1000
+        basic_model = pm.Model()
+        with basic_model:
+            #Priors on model
+            #NOTE: these are elements in vals in the order they appear in the code
+            if name == "continuum":
+                if cname == "Power Law":
+                    amp = pm.Uniform("amp",bounds[0][0],bounds[0][1])
+                    alpha = pm.Uniform("alpha",bounds[1][0],bounds[1][1])
+                    unity = pm.Uniform("unity",bounds[2][0],bounds[2][1])
+                    #Expected value
+                    mu = func(wl.astype(np.float32),amp,alpha,unity)
+                if cname == "Linear":
+                    incpt = pm.Uniform("incpt",bounds[0][0],bounds[0][1])
+                    slope = pm.Uniform("slope",bounds[1][0],bounds[1][1])
 
+                    mu = func(wl.astype(np.float32),incpt,slope)
+                if cname == "Polynomial":
+                    a = []
+                    for i in range(order):
+                        a.append(pm.Uniform("a{}".format(i),bounds[i][0],bounds[i][1]))
+                    mu = func(wl.astype(np.float32),*a)
+            if name == "EW":
+                amp = pm.Normal("amp",mu=(bounds[0][0]+bounds[0][1])/2,sigma=0.4*(bounds[0][1] - bounds[0][0]))
+                centroid = pm.Normal("centroid",mu=(bounds[1][0]+bounds[1][1])/2,sigma=0.4*(bounds[1][1] - bounds[1][0]))
+                sigma = pm.Normal("sigma",mu=(bounds[2][0]+bounds[2][1])/2,sigma=0.4*(bounds[2][1] - bounds[2][0]))
+                mu = func(wl.astype(np.float32),amp,centroid,sigma)
 
-        hists = np.array(hists)
-        value = [conf.ConfInt(hists[i][0],hists[i][1][1:],0.68) for i in range(len(hists))]
-        print('68 interval: {}'.format(value))
+            #Likelihood of sampling distribution
+            Y_obs = pm.Normal("Y_obs",mu=mu,sigma=err.astype(np.float32),observed=flux.astype(np.float32))
+            trace = pm.sample(5000,tune=5000,target_accept=0.85,cores=6)
+            vals = az.summary(trace,round_to=2)#NOTE: vals['mean'].keys() gives the parameter names
+            samples = pm.trace_to_dataframe(trace,varnames=vals['mean'].keys())
+            #embed()
+            az.plot_trace(trace)
+            plt.show()
+
+        
         if name == 'continuum':
-            self.contfit[0].append(ps)
-            self.conterr.append(value)
+            self.contfit[0].append(vals['mean'])
             if name in self.pdfs.keys():
                 name = self.cname + name #adding on extra name to differentiate continuum, won't work indefinitly
-            self.pdfs[name] = (mymc[0],ps)
-            params = np.array(mymc[0])
+            self.pdfs[name] = (samples,vals['mean'])
             #self.prior.append(func(wl,*params))
-            pen = (100,90,0) # sets the color of the line, TODO: Should make this user adjustable
+            pen = (50,200,50) # sets the color of the line, TODO: Should make this user adjustable
             cont = 1.0
+        
         if name == 'EW':
-            self.ewfit.append(ps)
-            self.ewferr.append(value)
-            self.pdfs[name] = (mymc[0],ps)
-            ewPdf = np.sqrt(2*np.pi)*np.array(mymc[0][0])*np.array(mymc[0][2])#TODO: multiply by "prior" which is the full continuum pdf
-            ewMeas = np.sqrt(2*np.pi)*ps[0]*ps[2]
-            self.pdfs['EWPDF'] = [ewPdf,[ewMeas]]
+            self.ewfit.append(vals['mean'])
+            self.pdfs[name] = (samples,vals['mean'])
+            ewPdf = np.sqrt(2*np.pi)*np.array(samples['amp'])*np.array(samples['sigma'])#TODO: multiply by "prior" which is the full continuum pdf
+            ewMeas = np.sqrt(2*np.pi)*vals['mean']['amp']*vals['mean']['sigma']
+            self.pdfs['EWPDF'] = [ewPdf,pd.DataFrame(data=np.array([ewMeas]),index=["EW"])]#TODO: need to figure out the data type that fits with showing pdfs
             pen = (0,100,0)
-            print("result of EW fit {}".format(self.ewfit))
-
             #This is used for GUI image such that we can see the fit
             #TODO: the whole self.fit train of thought is very kludgy, need to come up with cleaner method
             if self.cname == 'pl':
@@ -661,24 +673,21 @@ class App(QtGui.QMainWindow):
             elif self.cname == 'l':
                 cont = self.line(data[0].getData()[0],*self.fit)
             elif self.cname == 'p':
-                cont = fxn.polynomial(data[0].getData()[0],*self.fit)
-        self.fitProgress.setValue(100)    
-        self.plt[plt_name].plot(data[0].getData()[0],cont*func(data[0].getData()[0],*ps),pen=pen)
+                cont = fxn.polynomial(data[0].getData()[0],*self.fit)    
+        self.plt[plt_name].plot(data[0].getData()[0],cont*func(data[0].getData()[0],*vals['mean']),pen=pen)
+        
 
     def showPDFS(self):
         '''
         Helper function for displaying corner plot of fit parameters.
         This will display the results of a given fit.
-        TODO: Need to make the display more informative, right now it is unclear
-        what function we are looking at and which parameter goes where.
         TODO: self.pdfs should hold all non-deleted fits (that is, it should have all continua fits)
         '''
         func, ok = qt.QInputDialog.getItem(self,"Get Fit","Which Fit?: ",self.pdfs.keys(),0,False)
 
         if ok:
-            #TODO: have the labels be more meaningful based on which pdf is being shown
-            labels = ['a{}'.format(i) for i in range(len(self.pdfs[func][0]))]
-            corner.corner(np.transpose(self.pdfs[func][0]),bins=250,quantiles=[0.16,0.5,0.84],show_titles=True,
+            labels = self.pdfs[func][1].keys()
+            corner.corner(self.pdfs[func][0],bins=250,quantiles=[0.16,0.5,0.84],show_titles=True,
                         labels=labels,verbose=True,plot_contours=True,title_fmt=".2E",truths=self.pdfs[func][1],
                         levels=(0.68,)) #must be (values, # of parameters), (i.e. (365,4) corresponds to a fit with four parameters)
             plt.show()
