@@ -547,6 +547,8 @@ class App(QtGui.QMainWindow):
             #Start Line center determination
             Lin = np.trapz(finalflux*finalwl/finalerr**2,x=finalwl)/np.trapz(finalflux/finalerr**2,x=finalwl)
             Linerr = np.trapz(finalflux*finalwl**2/finalerr**2,x=finalwl)/np.trapz(finalflux/finalerr**2,x=finalwl)-Lin**2
+            F_nu = ((np.sum(1/finalerr**2))**2 - np.sum(1/finalerr**4))/(np.sum(1/finalerr**2))**2
+            Linerr = np.sqrt(Linerr/F_nu)
             infline = pg.InfiniteLine(Lin,pen=(100,50,200))
             self.plt[dat_choice].addItem(infline)
             qt.QMessageBox.about(self,"Measured","Line center: {0} \xb1 {1}".format(Lin,Linerr))
