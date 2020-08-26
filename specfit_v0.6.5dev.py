@@ -504,7 +504,7 @@ class App(QtGui.QMainWindow):
                 EW = np.trapz(EWflux,x=finalwl)#TODO: why is there such a large discrepency b/t this, stark(assume this is correct), and the parameterized EW?
                 #NOTE:don't think it makes sense, but what about weighting by error?
                 EWerr = np.sqrt(np.sum(finalerr**2))#TODO: not true for non equal sub-intervals
-                #TODO: err_i = (x[i+1]-x[i])/2 * np.sqrt(finalerr[i+1]**2 + finalerr[i]**2)
+                #TODO: err_i = (x[i+1]-x[i])/2 * np.sqrt(finalerr[i+1]**2 + finalerr[i]**2), then err_tot = np.sqrt(sum(err_i))
                 qt.QMessageBox.about(self,"Measured","Non-Parameterized EW: {0} \xb1 {1}".format(EW,EWerr))
             else:
                 qt.QMessageBox.about(self,"No continuum","No continuum available, not measuring")
