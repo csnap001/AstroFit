@@ -200,6 +200,7 @@ class App(QtGui.QMainWindow):
             loc = self.names1d.index(choice)
             self.Gwin1d.removeItem(self.plt[loc])
             self.plt.pop(loc)
+            self.names1d.pop(loc)
         else:
             qt.QMessageBox.about(self,"Done","Not Removing any plots")
 
@@ -675,7 +676,7 @@ class App(QtGui.QMainWindow):
                 x = wl[TotMask]
                 y = flux[TotMask]
                 CIVscatter = pg.ScatterPlotItem(x=x,y=y,pen=pg.mkPen('g'),brush=pg.mkBrush('g'))
-                self.plot_view.addItem(CIVscatter)
+                self.plt[dat_choice].addItem(CIVscatter)
                 wl = wl[~TotMask]#~ is bitwise NOT which is how we mask in python
                 flux = flux[~TotMask]
                 err = err[~TotMask]
@@ -748,7 +749,7 @@ class App(QtGui.QMainWindow):
 
             #Likelihood of sampling distribution
             Y_obs = pm.Normal("Y_obs",mu=mu,sigma=err.astype(np.float32),observed=flux.astype(np.float32))
-            trace = pm.sample(5000,tune=5000,target_accept=0.85,cores=2)
+            trace = pm.sample(50000,tune=4000,target_accept=0.85,cores=6)
             vals = az.summary(trace,round_to=2)#NOTE: vals['mean'].keys() gives the parameter names
             samples = pm.trace_to_dataframe(trace,varnames=vals['mean'].keys())
             #embed()
