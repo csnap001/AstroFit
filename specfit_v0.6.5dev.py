@@ -44,6 +44,7 @@ import matplotlib.pyplot as plt
 from functools import partial
 import os
 import corner
+import scipy as sc
 from IPython import embed
 
 
@@ -502,6 +503,7 @@ class App(QtGui.QMainWindow):
 
                 #Start EW determination
                 EW = np.trapz(EWflux,x=finalwl)#TODO: why is there such a large discrepency b/t this, stark(assume this is correct), and the parameterized EW?
+                #NOTE:stark and parameterized seem to be agreeing now (though double check)
                 #NOTE:don't think it makes sense, but what about weighting by error?
                 EWerr = np.sqrt(np.sum(finalerr**2))#TODO: not true for non equal sub-intervals
                 #TODO: err_i = (x[i+1]-x[i])/2 * np.sqrt(finalerr[i+1]**2 + finalerr[i]**2), then err_tot = np.sqrt(sum(err_i))
