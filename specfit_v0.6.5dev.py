@@ -502,9 +502,16 @@ class App(QtGui.QMainWindow):
                 #EWflux[EWflux < 0.0] = 0
                 finalwl = wl[mask]
                 finalerr = err[mask]/continuum[mask]
-                dat_to_use = (finalflux > 3.0*finalerr)
-                EWflux = EWflux[dat_to_use]
-                finalwl = finalwl[dat_to_use]
+                ind = np.where(EWflux == np.max(EWflux))
+                maxwl = finalwl[ind]
+                left = qt.QInputDialog.getDouble(self,"left","What velocity from maximum?: ",0,False)
+                right = qt.QInputDialog.getDouble(self,"left","What velocity from maximum?: ",0,False)
+                newMask = (finalwl > maxwl*(1-(left[0]/3e5))) & (finalwl < maxwl*(1+(right[0]/3e5)))
+                #NOTE: this gives consistent results, though they may not be the best choice
+                EWflux = EWflux[newMask]
+                finalwl = finalwl[newMask]
+                self.plt[dat_choice].plot(finalwl,EWflux,pen=(100,0,0))
+
 
                 #Start EW determination
                 EW = np.trapz(EWflux,x=finalwl)#TODO: why is there such a large discrepency b/t this, stark(assume this is correct), and the parameterized EW?
@@ -753,7 +760,7 @@ class App(QtGui.QMainWindow):
 
             #Likelihood of sampling distribution
             Y_obs = pm.Normal("Y_obs",mu=mu,sigma=err.astype(np.float32),observed=flux.astype(np.float32))
-            trace = pm.sample(50000,tune=4000,target_accept=0.85,cores=6)
+            trace = pm.sample(40000,tune=4000,target_accept=0.85,cores=6)
             vals = az.summary(trace,round_to=2)#NOTE: vals['mean'].keys() gives the parameter names
             samples = pm.trace_to_dataframe(trace,varnames=vals['mean'].keys())
             #embed()
