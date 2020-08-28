@@ -499,6 +499,7 @@ class App(QtGui.QMainWindow):
                 mask = (wl > lr[0]) & (wl < lr[1])
                 finalflux = normflux[mask]
                 EWflux = finalflux - 1.0
+                EWflux[EWflux < 0.0] = 0
                 finalwl = wl[mask]
                 finalerr = err[mask]/continuum[mask]
 
