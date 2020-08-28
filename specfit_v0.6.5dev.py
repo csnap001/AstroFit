@@ -499,9 +499,12 @@ class App(QtGui.QMainWindow):
                 mask = (wl > lr[0]) & (wl < lr[1])
                 finalflux = normflux[mask]
                 EWflux = finalflux - 1.0
-                EWflux[EWflux < 0.0] = 0
+                #EWflux[EWflux < 0.0] = 0
                 finalwl = wl[mask]
                 finalerr = err[mask]/continuum[mask]
+                dat_to_use = (finalflux > 3.0*finalerr)
+                EWflux = EWflux[dat_to_use]
+                finalwl = finalwl[dat_to_use]
 
                 #Start EW determination
                 EW = np.trapz(EWflux,x=finalwl)#TODO: why is there such a large discrepency b/t this, stark(assume this is correct), and the parameterized EW?
