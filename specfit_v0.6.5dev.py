@@ -697,7 +697,7 @@ class App(QtGui.QMainWindow):
         func, ok = qt.QInputDialog.getItem(self,"Get function","Function: ",items,0,False)
         if func == 'Power Law' and ok:
             #TODO: Force left bound as "centroid" in Pow?
-            self.Fitter(fxn.Pow,data,flux,err,wl,[(0,np.max(flux)),(-3,1),(np.min(wl),np.max(wl))],name='continuum',plt_name=dat_choice,cname=func)
+            self.Fitter(fxn.Pow,data,flux,err,wl,[(0,np.max(flux)),(-3,3),(np.min(wl),np.max(wl))],name='continuum',plt_name=dat_choice,cname=func)
             self.cname = 'pl'
             self.contfit[1].append('pl')
         elif func == 'Linear' and ok:
@@ -793,6 +793,7 @@ class App(QtGui.QMainWindow):
             elif self.cname == 'p':
                 cont = fxn.polynomial(data[0].getData()[0],*self.fit)    
         self.plt[plt_name].plot(data[0].getData()[0],cont*func(data[0].getData()[0],*vals['mean']),pen=pen)
+        del(basic_model)
         
 
     def showPDFS(self):
