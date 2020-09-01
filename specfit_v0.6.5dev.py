@@ -617,6 +617,9 @@ class App(QtGui.QMainWindow):
                 #prior probability as the distribution of the continuum 
                 # (which has its own prior of course)
                 normflux = flux/continuum
+                if np.any(np.isinf(normflux)):
+                    #NOTE: presuming that this is the result of a "non-existent" continuum
+                    normflux = (np.array(flux)+1.0)/(continuum + 1.0)
                 mask = (wl > lr[0]) & (wl < lr[1])
                 finalflux = normflux[mask]
                 finalwl = wl[mask]
@@ -737,9 +740,9 @@ class App(QtGui.QMainWindow):
             #NOTE: these are elements in vals in the order they appear in the code
             if name == "continuum":
                 if cname == "Power Law":
-                    amp = pm.Uniform("amp",bounds[0][0],bounds[0][1])
-                    alpha = pm.Uniform("alpha",bounds[1][0],bounds[1][1])
-                    unity = pm.Uniform("unity",bounds[2][0],bounds[2][1])
+                    amp = pm.TruncatedNormal("amp",mu=(bounds[0][0]+bounds[0][1])/2,sigma=0.4*(bounds[0][1]-bounds[0][0]),testval=(bounds[0][0]+bounds[0][1])/2,lower = 0.000001)
+                    alpha = pm.Normal("alpha",mu=(bounds[1][0]+bounds[1][1])/2,sigma=0.4*(bounds[1][1]-bounds[1][0]),testval=(bounds[1][0]+bounds[1][1])/2)
+                    unity = pm.Normal("unity",mu=(bounds[2][0]+bounds[2][1])/2,sigma=0.4*(bounds[2][1]-bounds[2][0]),testval=(bounds[2][0]+bounds[2][1])/2)
                     #Expected value
                     mu = func(wl.astype(np.float32),amp,alpha,unity)
                 if cname == "Linear":
@@ -753,17 +756,20 @@ class App(QtGui.QMainWindow):
                         a.append(pm.Uniform("a{}".format(i),bounds[i][0],bounds[i][1]))
                     mu = func(wl.astype(np.float32),*a)
             if name == "EW":
-                amp = pm.Normal("amp",mu=(bounds[0][0]+bounds[0][1])/2,sigma=0.4*(bounds[0][1] - bounds[0][0]))
-                centroid = pm.Normal("centroid",mu=(bounds[1][0]+bounds[1][1])/2,sigma=0.4*(bounds[1][1] - bounds[1][0]))
-                sigma = pm.Normal("sigma",mu=(bounds[2][0]+bounds[2][1])/2,sigma=0.4*(bounds[2][1] - bounds[2][0]))
+                amp = pm.TruncatedNormal("amp",mu=(bounds[0][0]+bounds[0][1])/2,sigma=0.4*(bounds[0][1] - bounds[0][0]),testval=(bounds[0][0]+bounds[0][1])/2,lower=0.01)
+                centroid = pm.Normal("centroid",mu=(bounds[1][0]+bounds[1][1])/2,sigma=0.4*(bounds[1][1] - bounds[1][0]),testval=(bounds[1][0]+bounds[1][1])/2)
+                sigma = pm.Normal("sigma",mu=(bounds[2][0]+bounds[2][1])/2,sigma=0.4*(bounds[2][1] - bounds[2][0]),testval=(bounds[2][0]+bounds[2][1])/2)
                 mu = func(wl.astype(np.float32),amp,centroid,sigma)
 
             #Likelihood of sampling distribution
             Y_obs = pm.Normal("Y_obs",mu=mu,sigma=err.astype(np.float32),observed=flux.astype(np.float32))
-            trace = pm.sample(40000,tune=4000,target_accept=0.85,cores=6)
-            vals = az.summary(trace,round_to=2)#NOTE: vals['mean'].keys() gives the parameter names
+            trace = pm.sample(40000,tune=4000,target_accept=0.85,cores=6,init='adapt_diag')
+            #vals = az.summary(trace,round_to=10)#NOTE: vals['mean'].keys() gives the parameter names
+            if cname == "Power Law":
+                vals = az.summary(trace,round_to=10,var_names=['amp','alpha','unity'])
+            elif name == "EW":
+                vals = az.summary(trace,round_to=10,var_names=['amp','centroid','sigma'])
             samples = pm.trace_to_dataframe(trace,varnames=vals['mean'].keys())
-            #embed()
             az.plot_trace(trace)
             plt.show()
 
