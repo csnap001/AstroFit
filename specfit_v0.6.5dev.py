@@ -257,10 +257,11 @@ class App(QtGui.QMainWindow):
 
         if exten == ".fits":
             if is1d:
-                check = self.addPlot(name=fileName)
+                strs = fileName.split('/')
+                check = self.addPlot(name=strs[len(strs)-1])
                 if check != -1:
                     self.plot_1d_fits(fileName=fileName)
-                    self.names1d.append(fileName)
+                    self.names1d.append(strs[len(strs) - 1])
             if is2d:
                 self.show_2d_fits(fileName=fileName)
             if isTab:
@@ -599,48 +600,24 @@ class App(QtGui.QMainWindow):
             flux = data[0].getData()[1]
             err = data[1].getData()[1]
            
-            if len(self.contfit[0]) > 0:
-                items = ("{}".format(i) for i in range(len(self.contfit[0])))
-                cont, ok = qt.QInputDialog.getItem(self,"Continuum","Which Continuum?:",items,0,False)
-                self.fit = self.contfit[0][int(cont)]
-                self.cname = self.contfit[1][int(cont)]
-                if self.cname == 'pl' and ok:
-                    continuum = fxn.Pow(wl,*self.fit)
-                elif self.cname == 'l' and ok:
-                    continuum = self.line(wl,*self.fit)
-                elif self.cname == 'p' and ok:
-                    continuum = fxn.polynomial(wl,*self.fit)
-                else:
-                    qt.QMessageBox.about(self,"Done","Exiting without fit")
-                    return
-                #TODO: in order to get full uncertainty of given quantity, need to define
-                #prior probability as the distribution of the continuum 
-                # (which has its own prior of course)
-                normflux = flux/continuum
-                if np.any(np.isinf(normflux)):
-                    #NOTE: presuming that this is the result of a "non-existent" continuum
-                    normflux = (np.array(flux)+1.0)/(continuum + 1.0)
-                mask = (wl > lr[0]) & (wl < lr[1])
-                finalflux = normflux[mask]
-                finalwl = wl[mask]
-                finalerr = err[mask]/continuum[mask]
-                #TODO: Need to propogate errors more appropriately. Use P(A and B) = P(A|B)*P(B), with P(B) = P(continuum) 
-                index = np.where(finalflux == np.max(finalflux))
-                peakWl = finalwl[index]
-                peakFl = finalflux[index]
-            
-                #TODO:add ability to choose other emission lines (perhaps arbitrary as well)
-                zcent = np.round((peakWl - 1215.67)/1215.67,6) #specific to lyman alpha
-                #TODO: Need to add choice for which line is being fit, or an arbitrary position
-                #TODO: is np.round necessary?
-                zB = ((peakWl - 0.2*peakWl), (peakWl + 0.2*peakWl))#TODO:Is this too constraining?
-                zB = (zB[0][0],zB[1][0])#necessary b/c zB is created as array of arrays and numpy fails with array inputs
-                sigB = (0.01, 15)
-                ampB = (0,peakFl + 0.2*peakFl) #TODO: is peak too tightly constrained?
-                ampB = (ampB[0],ampB[1][0])#same as z
-                self.Fitter(fxn.gauss,data,finalflux,finalerr,finalwl,[ampB,zB,sigB],name='EW',plt_name=dat_choice)
-            else:
-                qt.QMessageBox.about(self,"Warning!","No continua available! First fit continuum")
+            mask = (wl > lr[0]) & (wl < lr[1])
+            finalwl = wl[mask]
+            #TODO: Need to propogate errors more appropriately. Use P(A and B) = P(A|B)*P(B), with P(B) = P(continuum) 
+            index = np.where(flux[mask] == np.max(flux[mask]))
+            peakWl = finalwl[index]
+            peakFl = flux[mask][index]
+        
+            #TODO:add ability to choose other emission lines (perhaps arbitrary as well)
+            zcent = np.round((peakWl - 1215.67)/1215.67,6) #specific to lyman alpha
+            #TODO: Need to add choice for which line is being fit, or an arbitrary position
+            #TODO: is np.round necessary?
+            zB = ((peakWl - 0.2*peakWl), (peakWl + 0.2*peakWl))#TODO:Is this too constraining?
+            zB = (zB[0][0],zB[1][0])#necessary b/c zB is created as array of arrays and numpy fails with array inputs
+            sigB = (0.01, 15)
+            ampB = (0,peakFl + 0.2*peakFl) #TODO: is peak too tightly constrained?
+            ampB = (ampB[0],ampB[1][0])#same as z
+            self.Fitter(fxn.Powpgauss,data,flux[mask],err[mask],finalwl,[ampB,zB,sigB,(0,np.max(flux[mask])),(-3,3),(np.min(finalwl),np.max(finalwl))],name='EW',plt_name=dat_choice)
+
         else:
             qt.QMessageBox.about(self,"No data on screen","Not fitting")
                         
@@ -756,20 +733,26 @@ class App(QtGui.QMainWindow):
                         a.append(pm.Uniform("a{}".format(i),bounds[i][0],bounds[i][1]))
                     mu = func(wl.astype(np.float32),*a)
             if name == "EW":
-                amp = pm.TruncatedNormal("amp",mu=(bounds[0][0]+bounds[0][1])/2,sigma=0.4*(bounds[0][1] - bounds[0][0]),testval=(bounds[0][0]+bounds[0][1])/2,lower=0.01)
-                centroid = pm.Normal("centroid",mu=(bounds[1][0]+bounds[1][1])/2,sigma=0.4*(bounds[1][1] - bounds[1][0]),testval=(bounds[1][0]+bounds[1][1])/2)
-                sigma = pm.Normal("sigma",mu=(bounds[2][0]+bounds[2][1])/2,sigma=0.4*(bounds[2][1] - bounds[2][0]),testval=(bounds[2][0]+bounds[2][1])/2)
-                mu = func(wl.astype(np.float32),amp,centroid,sigma)
+                amp = pm.Normal("amp",mu=(bounds[0][0]+bounds[0][1])/2,sigma=0.4*(bounds[0][1] - bounds[0][0]),testval=(bounds[0][0]+bounds[0][1])/2)
+                centroid = pm.Normal("centroid",mu=(bounds[1][0]+bounds[1][1])/2,sigma=0.4*(bounds[1][1] - bounds[1][0]))
+                sigma = pm.TruncatedNormal("sigma",mu=(bounds[2][0]+bounds[2][1])/2,sigma=0.4*(bounds[2][1] - bounds[2][0]),testval=(bounds[2][0]+bounds[2][1])/2,lower=0)
+                cont_amp = pm.TruncatedNormal("cont_amp",mu=(bounds[3][0]+bounds[3][1])/2,sigma=0.4*(bounds[3][1] - bounds[3][0]),testval=(bounds[3][0]+bounds[3][1])/2,lower=0.0001)
+                alpha = pm.Normal("alpha",mu=(bounds[4][0]+bounds[4][1])/2,sigma=0.4*(bounds[4][1] - bounds[4][0]),testval=(bounds[4][0]+bounds[4][1])/2)
+                unity = pm.Normal("unity",mu=(bounds[5][0]+bounds[5][1])/2,sigma=0.4*(bounds[5][1] - bounds[5][0]),testval=(bounds[5][0]+bounds[5][1])/2)
+                mu = func(wl.astype(np.float32),amp,centroid,sigma,cont_amp,alpha,unity)
 
             #Likelihood of sampling distribution
             Y_obs = pm.Normal("Y_obs",mu=mu,sigma=err.astype(np.float32),observed=flux.astype(np.float32))
+            
+            #trace = pm.sample(20000,tune=5000,cores=6,init='adapt_diag',step=pm.step_methods.Metropolis())#used for testing parameter space
             trace = pm.sample(20000,tune=5000,target_accept=0.85,cores=6,init='adapt_diag')
             #vals = az.summary(trace,round_to=10)#NOTE: vals['mean'].keys() gives the parameter names
             if cname == "Power Law":
                 vals = az.summary(trace,round_to=10,var_names=['amp','alpha','unity'])
             elif name == "EW":
-                vals = az.summary(trace,round_to=10,var_names=['amp','centroid','sigma'])
+                vals = az.summary(trace,round_to=10,var_names=['amp','centroid','sigma','cont_amp','alpha','unity'])
             samples = pm.trace_to_dataframe(trace,varnames=vals['mean'].keys())
+            #embed()
             az.plot_trace(trace)
             plt.show()
 
@@ -786,18 +769,15 @@ class App(QtGui.QMainWindow):
         if name == 'EW':
             self.ewfit.append(vals['mean'])
             self.pdfs[name] = (samples,vals['mean'])
-            ewPdf = np.sqrt(2*np.pi)*np.array(samples['amp'])*np.array(samples['sigma'])#TODO: multiply by "prior" which is the full continuum pdf
-            ewMeas = np.sqrt(2*np.pi)*vals['mean']['amp']*vals['mean']['sigma']
+            #embed()
+            ewPdf = np.sqrt(2*np.pi)*np.array(samples['amp'])*np.array(samples['sigma'])/fxn.Pow(vals['mean']['centroid'],samples['cont_amp'],samples['alpha'],samples['unity'])#NOTE: this is now just the line flux
+            #TODO:fix EW measurement. need to divide by continuum at line (using all possible continua? ideally, yes)
+            ewMeas = np.sqrt(2*np.pi)*vals['mean']['amp']*vals['mean']['sigma']/fxn.Pow(vals['mean']['centroid'],vals['mean']['cont_amp'],vals['mean']['alpha'],vals['mean']['unity'])#NOTE: again just flux
             self.pdfs['EWPDF'] = [ewPdf,pd.core.series.Series([ewMeas],index=["EW"])]
             pen = (0,100,0)
+            cont = 1.0
             #This is used for GUI image such that we can see the fit
-            #TODO: the whole self.fit train of thought is very kludgy, need to come up with cleaner method
-            if self.cname == 'pl':
-                cont = fxn.Pow(data[0].getData()[0],*self.fit)
-            elif self.cname == 'l':
-                cont = self.line(data[0].getData()[0],*self.fit)
-            elif self.cname == 'p':
-                cont = fxn.polynomial(data[0].getData()[0],*self.fit)    
+            #TODO: the whole self.fit train of thought is very kludgy, need to come up with cleaner method   
         self.plt[plt_name].plot(data[0].getData()[0],cont*func(data[0].getData()[0],*vals['mean']),pen=pen)
         del(basic_model)
         
