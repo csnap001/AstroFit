@@ -511,8 +511,7 @@ class App(QtGui.QMainWindow):
                 self.pdfs['npEW'] = [EW_pdf,pd.core.series.Series([EW],index=["EW"])]
                 pdf_err = np.std(EW_pdf)
                 err_list = np.array([(finalwl[i+1] - finalwl[i])/2 * np.sqrt(finalerr[i+1]**2 + finalerr[i]**2) for i in range(len(finalwl)-1)])
-                EWerr = np.sqrt(np.sum(err_list**2) + pdf_err**2)#TODO: not true for non equal sub-intervals
-                #TODO: err_i = (x[i+1]-x[i])/2 * np.sqrt(finalerr[i+1]**2 + finalerr[i]**2), then err_tot = np.sqrt(sum(err_i))
+                EWerr = np.sqrt(np.sum(err_list**2) + pdf_err**2)
                 qt.QMessageBox.about(self,"Measured","Non-Parameterized EW: {0} \xb1 {1}".format(EW,EWerr))
             else:
                 qt.QMessageBox.about(self,"No continuum","No continuum available, not measuring")
@@ -594,21 +593,17 @@ class App(QtGui.QMainWindow):
             err = data[1].getData()[1]
            
             mask = (wl > lr[0]) & (wl < lr[1])
-            finalwl = wl[mask]
-            #TODO: Need to propogate errors more appropriately. Use P(A and B) = P(A|B)*P(B), with P(B) = P(continuum) 
+            finalwl = wl[mask] 
             index = np.where(flux[mask] == np.max(flux[mask]))
             peakWl = finalwl[index]
             peakFl = flux[mask][index]
         
-            #TODO:add ability to choose other emission lines (perhaps arbitrary as well)
-            zcent = np.round((peakWl - 1215.67)/1215.67,6) #specific to lyman alpha
-            #TODO: Need to add choice for which line is being fit, or an arbitrary position
-            #TODO: is np.round necessary?
-            zB = ((peakWl - 0.2*peakWl), (peakWl + 0.2*peakWl))#TODO:Is this too constraining?
+            zB = ((peakWl - 0.2*peakWl), (peakWl + 0.2*peakWl))
             zB = (zB[0][0],zB[1][0])#necessary b/c zB is created as array of arrays and numpy fails with array inputs
             sigB = (0.01, 15)
-            ampB = (0,peakFl + 0.2*peakFl) #TODO: is peak too tightly constrained?
+            ampB = (0,2*peakFl)
             ampB = (ampB[0],ampB[1][0])#same as z
+            #embed()
             self.Fitter(fxn.Powpgauss,data,flux[mask],err[mask],finalwl,[ampB,zB,sigB,(0,np.max(flux[mask])),(-3,3),(np.min(finalwl),np.max(finalwl))],name='EW',plt_name=dat_choice)
 
         else:
