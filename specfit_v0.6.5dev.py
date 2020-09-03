@@ -502,6 +502,7 @@ class App(QtGui.QMainWindow):
                 #NOTE: this gives consistent results, though they may not be the best choice
                 finalflux = finalflux[newMask]
                 finalwl = finalwl[newMask]
+                #TODO:fillbetween?
                 self.plt[dat_choice].plot(finalwl,finalflux,pen=(100,0,0))
 
 
