@@ -456,6 +456,7 @@ class App(QtGui.QMainWindow):
     def nonParamEW(self):
         '''
         Module for Non-parameterized Equivalent width determination
+        NOTE: the logic assumes you are finding an emission line
         '''
 
         choice, ok = qt.QInputDialog.getItem(self,"Which to fit","Choose data set:",self.names1d,0,False)
@@ -481,44 +482,36 @@ class App(QtGui.QMainWindow):
            
             if len(self.contfit[0]) > 0:
                 items = ("{}".format(i) for i in range(len(self.contfit[0])))
-                cont, ok = qt.QInputDialog.getItem(self,"Continuum","Which Continuum?:",items,0,False)
-                self.fit = self.contfit[0][int(cont)]
-                self.cname = self.contfit[1][int(cont)]
-                if self.cname == 'pl' and ok:
-                    continuum = fxn.Pow(wl,*self.fit)
-                elif self.cname == 'l' and ok:
-                    continuum = self.line(wl,*self.fit)
-                elif self.cname == 'p' and ok:
-                    continuum = fxn.polynomial(wl,*self.fit)
+                cont, ok = qt.QInputDialog.getItem(self,"Continuum","Which Continuum?:",self.pdfs.keys(),0,False)
+                if ok:
+                    #NOTE: this should grab the relevant Probability density functions
+                    samples = self.pdfs[cont][0]
                 else:
                     qt.QMessageBox.about(self,"Done","Exiting without fit")
                     return
-                #TODO: in order to get full uncertainty of given quantity, need to define
-                #prior probability as the distribution of the continuum 
-                # (which has its own prior of course)
-                normflux = flux/continuum
                 mask = (wl > lr[0]) & (wl < lr[1])
-                finalflux = normflux[mask]
-                EWflux = finalflux - 1.0
-                #EWflux[EWflux < 0.0] = 0
+                finalflux = flux[mask]
                 finalwl = wl[mask]
-                finalerr = err[mask]/continuum[mask]
-                ind = np.where(EWflux == np.max(EWflux))
+                finalerr = err[mask]
+                ind = np.where(finalflux == np.max(finalflux))
                 maxwl = finalwl[ind]
-                left = qt.QInputDialog.getDouble(self,"left","What velocity from maximum?: ",0,False)
-                right = qt.QInputDialog.getDouble(self,"left","What velocity from maximum?: ",0,False)
+                cont_pdf = fxn.Pow(maxwl,samples['amp'],samples['alpha'],samples['unity'])
+                left = qt.QInputDialog.getDouble(self,"left","What velocity left maximum?: ",0,False)
+                right = qt.QInputDialog.getDouble(self,"right","What velocity right maximum?: ",0,False)
                 newMask = (finalwl > maxwl*(1-(left[0]/3e5))) & (finalwl < maxwl*(1+(right[0]/3e5)))
                 #NOTE: this gives consistent results, though they may not be the best choice
-                EWflux = EWflux[newMask]
+                finalflux = finalflux[newMask]
                 finalwl = finalwl[newMask]
-                self.plt[dat_choice].plot(finalwl,EWflux,pen=(100,0,0))
+                self.plt[dat_choice].plot(finalwl,finalflux,pen=(100,0,0))
 
 
                 #Start EW determination
-                EW = np.trapz(EWflux,x=finalwl)#TODO: why is there such a large discrepency b/t this, stark(assume this is correct), and the parameterized EW?
-                #NOTE:stark and parameterized seem to be agreeing now (though double check)
-                #NOTE:don't think it makes sense, but what about weighting by error?
-                EWerr = np.sqrt(np.sum(finalerr**2))#TODO: not true for non equal sub-intervals
+                EW_pdf = np.trapz(finalflux,x=finalwl)/cont_pdf#TODO: why is there such a large discrepency b/t this, stark(assume this is correct), and the parameterized EW?
+                EW = np.mean(EW_pdf)
+                self.pdfs['npEW'] = [EW_pdf,pd.core.series.Series([EW],index=["EW"])]
+                pdf_err = np.std(EW_pdf)
+                err_list = np.array([(finalwl[i+1] - finalwl[i])/2 * np.sqrt(finalerr[i+1]**2 + finalerr[i]**2) for i in range(len(finalwl)-1)])
+                EWerr = np.sqrt(np.sum(err_list**2) + pdf_err**2)#TODO: not true for non equal sub-intervals
                 #TODO: err_i = (x[i+1]-x[i])/2 * np.sqrt(finalerr[i+1]**2 + finalerr[i]**2), then err_tot = np.sqrt(sum(err_i))
                 qt.QMessageBox.about(self,"Measured","Non-Parameterized EW: {0} \xb1 {1}".format(EW,EWerr))
             else:
@@ -769,10 +762,8 @@ class App(QtGui.QMainWindow):
         if name == 'EW':
             self.ewfit.append(vals['mean'])
             self.pdfs[name] = (samples,vals['mean'])
-            #embed()
-            ewPdf = np.sqrt(2*np.pi)*np.array(samples['amp'])*np.array(samples['sigma'])/fxn.Pow(vals['mean']['centroid'],samples['cont_amp'],samples['alpha'],samples['unity'])#NOTE: this is now just the line flux
-            #TODO:fix EW measurement. need to divide by continuum at line (using all possible continua? ideally, yes)
-            ewMeas = np.sqrt(2*np.pi)*vals['mean']['amp']*vals['mean']['sigma']/fxn.Pow(vals['mean']['centroid'],vals['mean']['cont_amp'],vals['mean']['alpha'],vals['mean']['unity'])#NOTE: again just flux
+            ewPdf = np.sqrt(2*np.pi)*np.array(samples['amp'])*np.array(samples['sigma'])/fxn.Pow(vals['mean']['centroid'],samples['cont_amp'],samples['alpha'],samples['unity'])
+            ewMeas = np.sqrt(2*np.pi)*vals['mean']['amp']*vals['mean']['sigma']/fxn.Pow(vals['mean']['centroid'],vals['mean']['cont_amp'],vals['mean']['alpha'],vals['mean']['unity'])
             self.pdfs['EWPDF'] = [ewPdf,pd.core.series.Series([ewMeas],index=["EW"])]
             pen = (0,100,0)
             cont = 1.0
