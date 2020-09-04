@@ -513,7 +513,8 @@ class App(QtGui.QMainWindow):
 
 
                 #Start EW determination
-                EW_pdf = np.trapz(finalflux,x=finalwl)/cont_pdf#TODO: why is there such a large discrepency b/t this, stark(assume this is correct), and the parameterized EW?
+                fflux = [flux - cont_pdf for flux in finalflux]#NOTE: first step in equivalent width determination
+                EW_pdf = np.trapz(fflux,x=finalwl,axis=0)/cont_pdf#TODO: why is there such a large discrepency b/t this, stark(assume this is correct), and the parameterized EW?
                 EW = np.mean(EW_pdf)
                 self.pdfs['npEW'] = [EW_pdf,pd.core.series.Series([EW],index=["EW"])]
                 pdf_err = np.std(EW_pdf)
