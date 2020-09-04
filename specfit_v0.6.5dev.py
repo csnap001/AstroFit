@@ -65,6 +65,7 @@ class App(QtGui.QMainWindow):
         self.regPlot = []#list to hold region plots
         self.yrange = [0,1]
         self.prior = []#list of continuum priors that can be used
+        self.fill = None
 
         self.is1d = False
         self.is2d = False
@@ -465,6 +466,7 @@ class App(QtGui.QMainWindow):
             return
         dat_choice = self.names1d.index(choice)
         data = self.plt[dat_choice].listDataItems()
+        if self.fill is not None: self.plt[dat_choice].removeItem(self.fill)
 
         check = [self.regPlot[i].getViewBox().viewRange()[0][0] for i in np.arange(len(self.regPlot))]
         reg, ok = qt.QInputDialog.getItem(self,"Choose a region","Which plot?:",np.array(check,str),0,False)#TODO: allow for multiple regions? or only abs masking?
@@ -502,8 +504,12 @@ class App(QtGui.QMainWindow):
                 #NOTE: this gives consistent results, though they may not be the best choice
                 finalflux = finalflux[newMask]
                 finalwl = finalwl[newMask]
+                finalerr = finalerr[newMask]
                 #TODO:fillbetween?
-                self.plt[dat_choice].plot(finalwl,finalflux,pen=(100,0,0))
+                Limit_curve_top = pg.PlotCurveItem(finalwl,finalflux)
+                Limit_curve_bottom = pg.PlotCurveItem(finalwl,finalerr)
+                self.fill = pg.FillBetweenItem(Limit_curve_bottom,Limit_curve_top,brush=(0,100,0,150))
+                self.plt[dat_choice].addItem(self.fill)
 
 
                 #Start EW determination
