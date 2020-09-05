@@ -695,7 +695,7 @@ class App(QtGui.QMainWindow):
                 
         return
         
-    
+    #TODO:Need to be able to mask certain data points. maybe instead of z, just ask for data in some bounds?
     def Fitter(self,func,data,flux,err,wl,bounds,name = '',plt_name=None,cname=None,order=None):
         '''
         helper function for fitting algorithms (cont_fit, and ew)
