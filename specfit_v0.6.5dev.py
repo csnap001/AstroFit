@@ -616,8 +616,6 @@ class App(QtGui.QMainWindow):
         else:
             qt.QMessageBox.about(self,"No data on screen","Not fitting")
                         
-    #TODO: Need to propagate errors to any other fits (How to do this?) use total prob distribution
-    # of continuum as prior probability for other fits
     def Cont_Fit(self):
         """
         This will ask for a wavelength range from the user. A continuum will be fit
