@@ -570,7 +570,6 @@ class App(QtGui.QMainWindow):
         else:
             qt.QMessageBox.about(self,"No data","No data to measure")
 
-    #TODO: Error results seem unphysical. Still unsure about this
     def fitting_1d(self):
         #calling specutils or some MCMC routine (perhaps emcee)
         #TODO: rename to parameterEW or something along these lines to distinguish from brute force integration method
