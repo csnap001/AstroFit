@@ -608,7 +608,7 @@ class App(QtGui.QMainWindow):
             zB = ((peakWl - 0.2*peakWl), (peakWl + 0.2*peakWl))
             zB = (zB[0][0],zB[1][0])#necessary b/c zB is created as array of arrays and numpy fails with array inputs
             sigB = (0.01, 15)
-            ampB = (0,2*peakFl)
+            ampB = (0,4*peakFl)
             ampB = (ampB[0],ampB[1][0])#same as z
             #embed()
             self.Fitter(fxn.Powpgauss,data,flux[mask],err[mask],finalwl,[ampB,zB,sigB,(0,np.max(flux[mask])),(-3,3),(np.min(finalwl),np.max(finalwl))],name='EW',plt_name=dat_choice)
@@ -726,11 +726,11 @@ class App(QtGui.QMainWindow):
                         a.append(pm.Uniform("a{}".format(i),bounds[i][0],bounds[i][1]))
                     mu = func(wl.astype(np.float32),*a)
             if name == "EW":
-                amp = pm.Normal("amp",mu=(bounds[0][0]+bounds[0][1])/2,sigma=0.4*(bounds[0][1] - bounds[0][0]),testval=(bounds[0][0]+bounds[0][1])/2)
+                amp = pm.Normal("amp",mu=(bounds[0][0]+bounds[0][1])/2,sigma=0.8*(bounds[0][1] - bounds[0][0]),testval=bounds[0][1]/2)
                 centroid = pm.Normal("centroid",mu=(bounds[1][0]+bounds[1][1])/2,sigma=0.4*(bounds[1][1] - bounds[1][0]))
                 sigma = pm.TruncatedNormal("sigma",mu=(bounds[2][0]+bounds[2][1])/2,sigma=0.4*(bounds[2][1] - bounds[2][0]),testval=(bounds[2][0]+bounds[2][1])/2,lower=0)
-                cont_amp = pm.TruncatedNormal("cont_amp",mu=(bounds[3][0]+bounds[3][1])/2,sigma=0.4*(bounds[3][1] - bounds[3][0]),testval=(bounds[3][0]+bounds[3][1])/2,lower=0.0001)
-                alpha = pm.Normal("alpha",mu=(bounds[4][0]+bounds[4][1])/2,sigma=0.4*(bounds[4][1] - bounds[4][0]),testval=(bounds[4][0]+bounds[4][1])/2)
+                cont_amp = pm.Normal("cont_amp",mu=(bounds[3][0]+bounds[3][1])/2,sigma=0.8*(bounds[3][1] - bounds[3][0]),testval=(bounds[3][0]+bounds[3][1])/2)#,lower=0.0000001)
+                alpha = pm.Normal("alpha",mu=(bounds[4][0]+bounds[4][1])/2,sigma=0.8*(bounds[4][1] - bounds[4][0]),testval=(bounds[4][0]+bounds[4][1])/2)
                 unity = pm.Normal("unity",mu=(bounds[5][0]+bounds[5][1])/2,sigma=0.4*(bounds[5][1] - bounds[5][0]),testval=(bounds[5][0]+bounds[5][1])/2)
                 mu = func(wl.astype(np.float32),amp,centroid,sigma,cont_amp,alpha,unity)
 
