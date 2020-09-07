@@ -738,7 +738,7 @@ class App(QtGui.QMainWindow):
             Y_obs = pm.Normal("Y_obs",mu=mu,sigma=err.astype(np.float32),observed=flux.astype(np.float32))
             
             #trace = pm.sample(20000,tune=5000,cores=6,init='adapt_diag',step=pm.step_methods.Metropolis())#used for testing parameter space
-            trace = pm.sample(20000,tune=5000,target_accept=0.85,cores=6,init='adapt_diag')
+            trace = pm.sample(20000,tune=6000,target_accept=0.85,cores=6,init='adapt_diag')
             #vals = az.summary(trace,round_to=10)#NOTE: vals['mean'].keys() gives the parameter names
             if cname == "Power Law":
                 vals = az.summary(trace,round_to=10,var_names=['amp','alpha','unity'])
