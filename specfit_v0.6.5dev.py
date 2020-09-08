@@ -598,6 +598,30 @@ class App(QtGui.QMainWindow):
             wl = data[0].getData()[0]
             flux = data[0].getData()[1]
             err = data[1].getData()[1]
+
+            Ans = qt.QMessageBox.question(self,"Masking","Mask Emission and Absorption lines?",qt.QMessageBox.Yes|qt.QMessageBox.No,qt.QMessageBox.No)
+
+            if Ans==qt.QMessageBox.Yes:
+                z, ok = qt.QInputDialog.getDouble(self,"Get redshift","z:",2.0,0.0,10.0,10)
+                if ok:
+                    wlCIV = 1550*(1+z)
+                    wlHeII = 1640*(1+z)#TODO: re-impliment using list of lines instead
+                    wlOIII = 1665*(1+z)
+                    c = 3e5 #km/s
+                    v = c*(wl-wlCIV)/wlCIV
+                    CIVMask = (v > -1000) & (v < 400)
+                    HeIIMask = (c*(wl-wlHeII)/wlHeII > -400) & (c*(wl-wlHeII)/wlHeII < 400)
+                    OIIIMask = (c*(wl-wlOIII)/wlOIII > -400) & (c*(wl-wlOIII)/wlOIII < 400)
+                    TotMask = CIVMask | HeIIMask | OIIIMask
+                    x = wl[TotMask]
+                    y = flux[TotMask]
+                    CIVscatter = pg.ScatterPlotItem(x=x,y=y,pen=pg.mkPen('g'),brush=pg.mkBrush('g'))
+                    self.plt[dat_choice].addItem(CIVscatter)
+                    wl = wl[~TotMask]#~ is bitwise NOT which is how we mask in python
+                    flux = flux[~TotMask]
+                    err = err[~TotMask]
+            else:
+                qt.QMessageBox.about(self,"No Mask","Continuing fit with all data in bounds")
            
             mask = (wl > lr[0]) & (wl < lr[1])
             finalwl = wl[mask] 
@@ -727,11 +751,11 @@ class App(QtGui.QMainWindow):
                     mu = func(wl.astype(np.float32),*a)
             if name == "EW":
                 amp = pm.Normal("amp",mu=(bounds[0][0]+bounds[0][1])/2,sigma=0.8*(bounds[0][1] - bounds[0][0]),testval=bounds[0][1]/2)
-                centroid = pm.Normal("centroid",mu=(bounds[1][0]+bounds[1][1])/2,sigma=0.4*(bounds[1][1] - bounds[1][0]))
+                centroid = pm.Normal("centroid",mu=(bounds[1][0]+bounds[1][1])/2,sigma=0.8*(bounds[1][1] - bounds[1][0]))
                 sigma = pm.TruncatedNormal("sigma",mu=(bounds[2][0]+bounds[2][1])/2,sigma=0.4*(bounds[2][1] - bounds[2][0]),testval=(bounds[2][0]+bounds[2][1])/2,lower=0)
                 cont_amp = pm.Normal("cont_amp",mu=(bounds[3][0]+bounds[3][1])/2,sigma=0.8*(bounds[3][1] - bounds[3][0]),testval=(bounds[3][0]+bounds[3][1])/2)#,lower=0.0000001)
                 alpha = pm.Normal("alpha",mu=(bounds[4][0]+bounds[4][1])/2,sigma=0.8*(bounds[4][1] - bounds[4][0]),testval=(bounds[4][0]+bounds[4][1])/2)
-                unity = pm.Normal("unity",mu=(bounds[5][0]+bounds[5][1])/2,sigma=0.4*(bounds[5][1] - bounds[5][0]),testval=(bounds[5][0]+bounds[5][1])/2)
+                unity = pm.Normal("unity",mu=(bounds[5][0]+bounds[5][1])/2,sigma=0.8*(bounds[5][1] - bounds[5][0]),testval=(bounds[5][0]+bounds[5][1])/2)
                 mu = func(wl.astype(np.float32),amp,centroid,sigma,cont_amp,alpha,unity)
 
             #Likelihood of sampling distribution
