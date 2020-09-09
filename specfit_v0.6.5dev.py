@@ -635,7 +635,7 @@ class App(QtGui.QMainWindow):
             ampB = (0,4*peakFl)
             ampB = (ampB[0],ampB[1][0])#same as z
             #embed()
-            self.Fitter(fxn.Powpgauss,data,flux[mask],err[mask],finalwl,[ampB,zB,sigB,(0,np.max(flux[mask])),(-3,3),(np.min(finalwl),np.max(finalwl))],name='EW',plt_name=dat_choice)
+            self.Fitter(fxn.Powpgauss,data,flux[mask],err[mask],finalwl,[ampB,zB,sigB,(0,np.max(flux[mask])),(-5,5),(3200,3600)],name='EW',plt_name=dat_choice)
 
         else:
             qt.QMessageBox.about(self,"No data on screen","Not fitting")
@@ -750,20 +750,23 @@ class App(QtGui.QMainWindow):
                         a.append(pm.Uniform("a{}".format(i),bounds[i][0],bounds[i][1]))
                     mu = func(wl.astype(np.float32),*a)
             if name == "EW":
+                #Priors
                 amp = pm.Normal("amp",mu=(bounds[0][0]+bounds[0][1])/2,sigma=0.8*(bounds[0][1] - bounds[0][0]),testval=bounds[0][1]/2)
                 centroid = pm.Normal("centroid",mu=(bounds[1][0]+bounds[1][1])/2,sigma=0.8*(bounds[1][1] - bounds[1][0]))
                 sigma = pm.TruncatedNormal("sigma",mu=(bounds[2][0]+bounds[2][1])/2,sigma=0.4*(bounds[2][1] - bounds[2][0]),testval=(bounds[2][0]+bounds[2][1])/2,lower=0)
                 cont_amp = pm.Normal("cont_amp",mu=(bounds[3][0]+bounds[3][1])/2,sigma=0.8*(bounds[3][1] - bounds[3][0]),testval=(bounds[3][0]+bounds[3][1])/2)#,lower=0.0000001)
                 alpha = pm.Normal("alpha",mu=(bounds[4][0]+bounds[4][1])/2,sigma=0.8*(bounds[4][1] - bounds[4][0]),testval=(bounds[4][0]+bounds[4][1])/2)
-                unity = pm.Normal("unity",mu=(bounds[5][0]+bounds[5][1])/2,sigma=0.8*(bounds[5][1] - bounds[5][0]),testval=(bounds[5][0]+bounds[5][1])/2)
+                unity = pm.TruncatedNormal("unity",mu=(bounds[5][0]+bounds[5][1])/2,sigma=0.8*(bounds[5][1] - bounds[5][0]),testval=(bounds[5][0]+bounds[5][1])/2,lower=3200,upper=3600)
+
                 mu = func(wl.astype(np.float32),amp,centroid,sigma,cont_amp,alpha,unity)
 
             #Likelihood of sampling distribution
             Y_obs = pm.Normal("Y_obs",mu=mu,sigma=err.astype(np.float32),observed=flux.astype(np.float32))
             
             #trace = pm.sample(20000,tune=5000,cores=6,init='adapt_diag',step=pm.step_methods.Metropolis())#used for testing parameter space
-            trace = pm.sample(20000,tune=6000,target_accept=0.85,cores=6,init='adapt_diag')
+            trace = pm.sample(17000,tune=10000,target_accept=0.80,cores=6,init='adapt_diag')
             #vals = az.summary(trace,round_to=10)#NOTE: vals['mean'].keys() gives the parameter names
+            #embed()
             if cname == "Power Law":
                 vals = az.summary(trace,round_to=10,var_names=['amp','alpha','unity'])
             elif name == "EW":
@@ -771,6 +774,7 @@ class App(QtGui.QMainWindow):
             samples = pm.trace_to_dataframe(trace,varnames=vals['mean'].keys())
             #embed()
             az.plot_trace(trace)
+            pm.pairplot(trace,divergences=True)
             plt.show()
 
         
