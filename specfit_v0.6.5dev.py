@@ -514,7 +514,7 @@ class App(QtGui.QMainWindow):
 
                 #Start EW determination
                 fflux = [flux - cont_pdf for flux in finalflux]#NOTE: first step in equivalent width determination
-                EW_pdf = np.trapz(fflux,x=finalwl,axis=0)/cont_pdf#TODO: why is there such a large discrepency b/t this, stark(assume this is correct), and the parameterized EW?
+                EW_pdf = np.trapz(fflux,x=finalwl,axis=0)/cont_pdf
                 EW = np.mean(EW_pdf)
                 self.pdfs['npEW'] = [EW_pdf,pd.core.series.Series([EW],index=["EW"])]
                 pdf_err = np.std(EW_pdf)
@@ -820,7 +820,7 @@ class App(QtGui.QMainWindow):
 
         if ok:
             labels = self.pdfs[func][1].keys()
-            corner.corner(self.pdfs[func][0],bins=250,quantiles=[0.16,0.5,0.84],show_titles=True,
+            corner.corner(self.pdfs[func][0],quantiles=[0.16,0.5,0.84],show_titles=True,
                         labels=labels,verbose=True,plot_contours=True,title_fmt=".3E",truths=self.pdfs[func][1],
                         levels=(0.68,)) #must be (values, # of parameters), (i.e. (365,4) corresponds to a fit with four parameters)
             plt.show()
