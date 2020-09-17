@@ -607,14 +607,16 @@ class App(QtGui.QMainWindow):
                     wlCIV = 1550*(1+z)
                     wlHeII = 1640*(1+z)#TODO: re-impliment using list of lines instead
                     wlOIII = 1665*(1+z)
+                    wlCIII = 1908*(1+z)
                     c = 3e5 #km/s
                     v = c*(wl-wlCIV)/wlCIV
                     CIVMask = (v > -1000) & (v < 400)
                     HeIIMask = (c*(wl-wlHeII)/wlHeII > -400) & (c*(wl-wlHeII)/wlHeII < 400)
                     OIIIMask = (c*(wl-wlOIII)/wlOIII > -400) & (c*(wl-wlOIII)/wlOIII < 400)
+                    CIIIMask = (c*(wl-wlCIII)/wlCIII > -400) & (c*(wl-wlCIII)/wlCIII < 400)
                     #add1 = (wl > 4819) & (wl < 4981)
                     #add2 = (wl > 5162) & (wl < 5305)
-                    TotMask = CIVMask | HeIIMask | OIIIMask #| add1 | add2
+                    TotMask = CIVMask | HeIIMask | OIIIMask | CIIIMask #| add1 | add2
                     x = wl[TotMask]
                     y = flux[TotMask]
                     CIVscatter = pg.ScatterPlotItem(x=x,y=y,pen=pg.mkPen('g'),brush=pg.mkBrush('g'))
@@ -682,14 +684,16 @@ class App(QtGui.QMainWindow):
                 wlCIV = 1550*(1+z)
                 wlHeII = 1640*(1+z)#TODO: re-impliment using list of lines instead
                 wlOIII = 1665*(1+z)
+                wlCIII = 1908*(1+z)
                 c = 3e5 #km/s
                 v = c*(wl-wlCIV)/wlCIV
                 CIVMask = (v > -1000) & (v < 400)
                 HeIIMask = (c*(wl-wlHeII)/wlHeII > -400) & (c*(wl-wlHeII)/wlHeII < 400)
                 OIIIMask = (c*(wl-wlOIII)/wlOIII > -400) & (c*(wl-wlOIII)/wlOIII < 400)
+                CIIIMask = (c*(wl-wlCIII)/wlCIII > -400) & (c*(wl-wlCIII)/wlCIII < 400)
                 #add1 = (wl > 4819) & (wl < 4981)
                 #add2 = (wl > 5162) & (wl < 5305)
-                TotMask = CIVMask | HeIIMask | OIIIMask #| add1 | add2
+                TotMask = CIVMask | HeIIMask | OIIIMask | CIIIMask #| add1 | add2
                 x = wl[TotMask]
                 y = flux[TotMask]
                 CIVscatter = pg.ScatterPlotItem(x=x,y=y,pen=pg.mkPen('g'),brush=pg.mkBrush('g'))
@@ -738,6 +742,10 @@ class App(QtGui.QMainWindow):
 
         #mymc = mcmc.fit(func,wl,flux,err, 3000,*bounds) #was 1000
         basic_model = pm.Model()
+        if np.max(wl) - np.min(wl) > 500:
+            midwl = np.mean(wl)
+            leftun = midwl - 250
+            rghtun = midwl + 250
         with basic_model:
             #Priors on model
             #NOTE: these are elements in vals in the order they appear in the code
@@ -745,7 +753,7 @@ class App(QtGui.QMainWindow):
                 if cname == "Power Law":
                     amp = pm.Normal("amp",mu=(bounds[0][0]+bounds[0][1])/2,sigma=0.8*(bounds[0][1]-bounds[0][0]),testval=(bounds[0][0]+bounds[0][1])/2)
                     alpha = pm.TruncatedNormal("alpha",mu=(bounds[1][0]+bounds[1][1])/2,sigma=0.8*(bounds[1][1]-bounds[1][0]),testval=(bounds[1][0]+bounds[1][1])/2,lower=-5,upper=8)
-                    unity = pm.TruncatedNormal("unity",mu=(bounds[2][0]+bounds[2][1])/2,sigma=0.8*(bounds[2][1]-bounds[2][0]),testval=(bounds[2][0]+bounds[2][1])/2,lower=np.min(wl),upper=np.max(wl))
+                    unity = pm.TruncatedNormal("unity",mu=(bounds[2][0]+bounds[2][1])/2,sigma=0.8*(bounds[2][1]-bounds[2][0]),testval=(bounds[2][0]+bounds[2][1])/2,lower=leftun,upper=rghtun)
                     #Expected value
                     mu = func(wl.astype(np.float32),amp,alpha,unity)
                 if cname == "Linear":
@@ -765,7 +773,7 @@ class App(QtGui.QMainWindow):
                 sigma = pm.TruncatedNormal("sigma",mu=(bounds[2][0]+bounds[2][1])/2,sigma=0.4*(bounds[2][1] - bounds[2][0]),testval=(bounds[2][0]+bounds[2][1])/2,lower=0)
                 cont_amp = pm.Normal("cont_amp",mu=(bounds[3][0]+bounds[3][1])/2,sigma=0.8*(bounds[3][1] - bounds[3][0]),testval=(bounds[3][0]+bounds[3][1])/2)#,lower=0.0000001)
                 alpha = pm.TruncatedNormal("alpha",mu=(bounds[4][0]+bounds[4][1])/2,sigma=0.8*(bounds[4][1] - bounds[4][0]),testval=(bounds[4][0]+bounds[4][1])/2,lower=-5,upper=8)
-                unity = pm.TruncatedNormal("unity",mu=(bounds[5][0]+bounds[5][1])/2,sigma=0.8*(bounds[5][1] - bounds[5][0]),testval=(bounds[5][0]+bounds[5][1])/2,lower=np.min(wl),upper=np.max(wl))
+                unity = pm.TruncatedNormal("unity",mu=(bounds[5][0]+bounds[5][1])/2,sigma=0.8*(bounds[5][1] - bounds[5][0]),testval=(bounds[5][0]+bounds[5][1])/2,lower=leftun,upper=rghtun)
 
                 mu = func(wl.astype(np.float32),amp,centroid,sigma,cont_amp,alpha,unity)
 
