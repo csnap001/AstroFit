@@ -746,6 +746,9 @@ class App(QtGui.QMainWindow):
             midwl = np.mean(wl)
             leftun = midwl - 250
             rghtun = midwl + 250
+        else:
+            leftun = np.min(wl)
+            rghtun = np.max(wl)
         with basic_model:
             #Priors on model
             #NOTE: these are elements in vals in the order they appear in the code
