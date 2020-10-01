@@ -771,12 +771,29 @@ class App(QtGui.QMainWindow):
                     mu = func(wl.astype(np.float32),*a)
             if name == "EW":
                 #Priors
+                
                 amp = pm.Normal("amp",mu=(bounds[0][0]+bounds[0][1])/2,sigma=0.8*(bounds[0][1] - bounds[0][0]),testval=bounds[0][1]/2)
                 centroid = pm.Normal("centroid",mu=(bounds[1][0]+bounds[1][1])/2,sigma=0.8*(bounds[1][1] - bounds[1][0]))
                 sigma = pm.TruncatedNormal("sigma",mu=(bounds[2][0]+bounds[2][1])/2,sigma=0.4*(bounds[2][1] - bounds[2][0]),testval=(bounds[2][0]+bounds[2][1])/2,lower=0)
-                cont_amp = pm.Normal("cont_amp",mu=(bounds[3][0]+bounds[3][1])/2,sigma=0.8*(bounds[3][1] - bounds[3][0]),testval=(bounds[3][0]+bounds[3][1])/2)#,lower=0.0000001)
+                #cont_amp = pm.Normal("cont_amp",mu=(bounds[3][0]+bounds[3][1])/2,sigma=0.8*(bounds[3][1] - bounds[3][0]),testval=(bounds[3][0]+bounds[3][1])/2)#,lower=0.0000001)
                 alpha = pm.TruncatedNormal("alpha",mu=(bounds[4][0]+bounds[4][1])/2,sigma=0.8*(bounds[4][1] - bounds[4][0]),testval=(bounds[4][0]+bounds[4][1])/2,lower=-5,upper=5)
-                unity = pm.TruncatedNormal("unity",mu=(bounds[5][0]+bounds[5][1])/2,sigma=0.8*(bounds[5][1] - bounds[5][0]),testval=(bounds[5][0]+bounds[5][1])/2,lower=leftun,upper=rghtun)
+                #unity = pm.TruncatedNormal("unity",mu=(bounds[5][0]+bounds[5][1])/2,sigma=0.8*(bounds[5][1] - bounds[5][0]),testval=(bounds[5][0]+bounds[5][1])/2,lower=leftun,upper=rghtun)
+                
+                mu = [(bounds[i][0] + bounds[i][1]/2) for i in range(len(bounds))]
+                sig = [0.8*(bounds[i][1] - bounds[i][0]) for i in range(len(bounds))]
+                #amp_0 = pm.Normal("amp_0",mu=0,sigma=1)
+                #cent_0 = pm.Normal("cent_0",mu=0,sigma=1)
+                #sig_0 = pm.Normal("sig_0",mu=0,sigma=1)
+                cont_0 = pm.Normal("cont_0",mu=0,sigma=1)
+                #alph_0 = pm.Normal("alph_0",mu=0,sigma=1)
+                un_0 = pm.Normal("un_0",mu=0,sigma=1)
+
+                #amp = pm.Deterministic("amp",mu[0] + sig[0]*amp_0)
+                #centroid = pm.Deterministic("centroid",mu[1] + sig[1]*cent_0)
+                #sigma = pm.Deterministic("sigma",mu[2] + sig[2]*sig_0)
+                cont_amp = pm.Deterministic("cont_amp",mu[3] + sig[3]*cont_0)
+                #alpha = pm.Deterministic("alpha",mu[4] + sig[4]*alph_0)
+                unity = pm.Deterministic("unity",mu[5] + sig[5]*un_0)
 
                 #TODO: consider using non-centered reparameterization, i.e. amp = mu + sigma*amp_0, where amp_0 ~ N(0,1)
                 #use 540 as example case
@@ -796,8 +813,8 @@ class App(QtGui.QMainWindow):
                 vals = az.summary(trace,round_to=10,var_names=['amp','centroid','sigma','cont_amp','alpha','unity'])
             samples = pm.trace_to_dataframe(trace,varnames=vals['mean'].keys())
             #embed()
-            az.plot_trace(trace)
-            pm.pairplot(trace,divergences=True)
+            az.plot_trace(trace,var_names=vals['mean'].keys())
+            pm.pairplot(trace,divergences=False,var_names=vals['mean'].keys())
             plt.show()
 
         
@@ -823,7 +840,10 @@ class App(QtGui.QMainWindow):
         self.plt[plt_name].plot(data[0].getData()[0],cont*func(data[0].getData()[0],*vals['mean']),pen=pen)
         del(basic_model)
         
-
+    #TODO: add in more arviz visualizations. This can help with interpreting
+    #Fitting results. Should consider allowing user to adjust parameterization
+    #but should make this a visual thing (It would be helpful to output the sigma
+    # compared with the original choice for sigma in the normal distribution)
     def showPDFS(self):
         '''
         Helper function for displaying corner plot of fit parameters.
