@@ -24,4 +24,5 @@ def buttons(self):
         self.EcolorBut = qt.QPushButton("Err color", self)
         self.contBut = qt.QPushButton("Fit Cont", self)
         self.getFitsBut = qt.QPushButton("Get Fits",self)
+        self.fluxToLum = qt.QPushButton("F to L",self)
         return

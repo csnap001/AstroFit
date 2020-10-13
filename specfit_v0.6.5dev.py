@@ -46,6 +46,7 @@ import os
 import corner
 import scipy as sc
 from IPython import embed
+from astropy import cosmology
 
 
 class App(QtGui.QMainWindow):
@@ -571,12 +572,10 @@ class App(QtGui.QMainWindow):
             qt.QMessageBox.about(self,"No data","No data to measure")
 
     def fitting_1d(self):
-        #calling specutils or some MCMC routine (perhaps emcee)
         #TODO: rename to parameterEW or something along these lines to distinguish from brute force integration method
         """
         This will take in user input on the location of some peak and then fit a gaussian to that peak.
         """
-        #TODO: Need to propogate errors from continuum fit, use full continuum pdf
         #TODO: here we need to first ask for which plot/dataset, then which continuum, and then which region
         choice, ok = qt.QInputDialog.getItem(self,"Which to fit","Choose data set:",self.names1d,0,False)
         if not(ok):
@@ -844,6 +843,58 @@ class App(QtGui.QMainWindow):
     #Fitting results. Should consider allowing user to adjust parameterization
     #but should make this a visual thing (It would be helpful to output the sigma
     # compared with the original choice for sigma in the normal distribution)
+    def Flux_to_Lum(self):
+
+        choice, ok = qt.QInputDialog.getItem(self,"Which plot","Choose data set:",self.names1d,0,False)
+        if not(ok):
+            qt.QMessageBox.about(self,"Not converting","Chose no data, not converting.")
+            return
+        z, ok = qt.QInputDialog.getDouble(self,"Get redshift","z:",2.0,0.0,10.0,10)
+        if not(ok):
+            qt.QMessageBox.about(self,"No redshift","can't convert without redshift")
+            return
+        
+        dat_choice = self.names1d.index(choice)
+        data = self.plt[dat_choice].listDataItems()
+        wl = data[0].getData()[0]
+        measurements = data[0].getData()[1]
+        measurement_errs = data[1].getData()[1]
+
+        H0 = 70.0
+        Om0 = 0.3
+        Ob0 = 0.05
+        Tcmb0 = 2.725
+    
+
+        cosmo = cosmology.FlatLambdaCDM(H0=H0, Om0=Om0, Ob0=Ob0, Tcmb0=Tcmb0)
+
+
+
+        flux_to_lum = lambda flux, lum_dist: np.multiply(np.multiply(flux, np.square(lum_dist)), 4.*np.pi)  ## bolometric fluxes and luminosities
+        lum_to_flux = lambda lum, lum_dist:  np.divide(np.divide(lum, np.square(lum_dist)), 4.*np.pi)
+
+        cm_in_Mpc = 3.086e24
+
+        obj_lum_dist_Mpc = cosmo.luminosity_distance(z).value
+        obj_lum_dist_cm  = obj_lum_dist_Mpc * cm_in_Mpc
+
+
+        ## The (1+redshift) factor accounts for the fact that flux and luminosity are densities per unit WAVELENGTH
+        ## The (1+redshift) factor would not be applied to bolometric luminosities and fluxes
+        ## The (1+redshift) factor would be in the denominator / numerator respectively if densities were per unit frequency
+        ## See Hogg+2002 K-correction paper
+
+        self.plt[dat_choice].clear()
+        converted_meas = flux_to_lum(measurements, obj_lum_dist_cm)
+        conv_meas_errs = flux_to_lum(measurement_errs, obj_lum_dist_cm)
+        converted_meas = np.multiply(converted_meas, 1.+ z)
+        conv_meas_errs = np.multiply(conv_meas_errs, 1.+ z)
+        self.plt[dat_choice].plot(wl,converted_meas,pen='b')
+        self.plt[dat_choice].plot(wl,conv_meas_errs)
+
+
+        return converted_meas, conv_meas_errs
+
     def showPDFS(self):
         '''
         Helper function for displaying corner plot of fit parameters.

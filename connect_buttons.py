@@ -24,4 +24,5 @@ def connect(self):
         self.getFitsBut.clicked.connect(self.showPDFS)
         self.addReg.clicked.connect(self.whichPlot)
         self.remReg.clicked.connect(self.removeRegPlot)
+        self.fluxToLum.clicked.connect(self.Flux_to_Lum)
         return
