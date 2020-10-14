@@ -8,6 +8,9 @@ TODO: Add progress bar for fits: self.progress = QtGui.ProgressBar(self) -> self
 TODO: 2 primary functions need to be built. 1: need non-parameterized equivalent width determination
 2: Need line center determination. use paper that fred sent (find the first moment)
 generally speaking there is more to be done than this, but this will be sufficient for now
+TODO: Re-organize storage of data. There should be meta-data fxns that feed to data analysis fxns
+Should write out and organize my thoughts on this. 
+TODO: Should save data to files as well (.dat?)
 
 Module for GUI spectroscopic fitting environment based on specutils
 and astropy. (Possibly, desired) This module will also have basic image arithmatic capabilities.
