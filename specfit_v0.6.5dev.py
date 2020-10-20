@@ -11,6 +11,7 @@ generally speaking there is more to be done than this, but this will be sufficie
 TODO: Re-organize storage of data. There should be meta-data fxns that feed to data analysis fxns
 Should write out and organize my thoughts on this. 
 TODO: Should save data to files as well (.dat?)
+TODO: Add operations to data elements (mostly to account for inverse variance stuff)
 
 Module for GUI spectroscopic fitting environment based on specutils
 and astropy. (Possibly, desired) This module will also have basic image arithmatic capabilities.
