@@ -302,20 +302,13 @@ class App(QtGui.QMainWindow):
         if not(txt == -1):
             pass
 
-    #TODO: currently this is specifically desigened for bill's data
-    # it would be better to simply plot the data and then allow the user 
-    # to rearrange by selecting which datum will go along the x and y axes.
-    # could also have option for plotting multiple data elements, such
-    # as 'raw' and 'error' (with the ability to have both at the same time)
-    # this requires knowledge about astropy headers.
+
     #TODO: Should also check data dimensions to ensure that the input file is not
     # an image file. Must force one dimensional spectrum data
     #NOTE: Each fits file extension (i.e. hdul[1]) as an NAXIS memeber that states the 
     # number of data axes. So in bill's data the header has NAXIS = 1 and then in the 
     # image files we have NAXIS = 2. We can use this to implement restrictions
     #TODO: Consider Plotting BINNED data, can use stepMode = True, but requires len(x) == len(y) + 1
-    #NOTE: Wavelength data can be given by some start wavelength, delta wavelength, and number of pixels
-    # Therefore, it is necessary to grab this information and construct the wavelength bins
     def updatePlot(self,count,wl,flux,err):
         self.plt[count].clear()
         pen = pg.mkPen(color='b')
@@ -364,24 +357,42 @@ class App(QtGui.QMainWindow):
                 if Happy == "True":
                     break
             #TODO: How to grab data arbitrarily?
-            #embed()
 
 
-            '''
-            stwl = hdul[0].header['CRVAL1']
-            #print(stwl)
-            step = hdul[0].header['CDELT1']
-            flux = hdul[1].data
-            #print(flux[0])
-            wl = [stwl + step*i for i in range(len(flux))]
-            err = hdul[2].data
-            pen = pg.mkPen(color='b')
-            self.flux = self.plt[count].plot(wl,flux,pen=pen)#NOTE: these allow me to change the colors of these plots
-            self.err = self.plt[count].plot(wl,err)
-            '''
             pg.SignalProxy(self.plt[count].scene().sigMouseMoved, rateLimit=60,slot=self.mouseMoveEvent)
             self.plt[count].scene().sigMouseMoved.connect(self.mouseMoveEvent)
-            
+
+    def Data_operations(self):
+        """
+        The goal of this function is to allow the user to perform operations
+        on the data elements that are being plotted
+        """
+        choice, ok = qt.QInputDialog.getItem(self,"Which plot","Choose data set:",self.names1d,0,False)
+        if not(ok):
+            qt.QMessageBox.about(self,"Not adjusting","Chose no data, not performing any operations.")
+            return
+        dat_choice = self.names1d.index(choice)
+        data = self.plt[dat_choice].listDataItems()
+        data_names = {"wl":data[0].getData()[0],"flux":data[0].getData()[1],"err":data[1].getData()[1]}
+
+        while True:
+            name, ok = qt.QInputDialog.getItem(self,"data","Which data element?:",data_names.keys(),0,False)
+            if not(ok):
+                qt.QMessageBox.about(self,"No operation?","No data element was chosen")
+            op, ok = qt.QInputDialog.getItem(self,"what Math?","What operation would you like to perform",["invert","square root"],0,False)
+            if op == "invert":
+                data_names[name] = 1/data_names[name]
+            if op == "square root":
+                data_names[name] = np.sqrt(data_names[name])
+
+            self.plt[dat_choice].clear()
+            self.plt[dat_choice].plot(data_names['wl'],data_names['flux'],pen='b')
+            self.plt[dat_choice].plot(data_names['wl'],data_names['err'])
+
+            Happy, ok = qt.QInputDialog.getItem(self,"Good","Finished?:",["True","False"],0,False)
+            if Happy:
+                break
+
     def get1d_from2d(self):
         #likely will call plot_1d_fits. pg.affineSlice might be helpful here
         pass
@@ -741,9 +752,7 @@ class App(QtGui.QMainWindow):
         helper function for fitting algorithms (cont_fit, and ew)
         '''
         #TODO: Threading for progress bar? Maybe just add in self.MCMC code block?
-        #TODO: Need to fix mcmc or use emcee or MULTINEST?
 
-        #mymc = mcmc.fit(func,wl,flux,err, 3000,*bounds) #was 1000
         basic_model = pm.Model()
         if np.max(wl) - np.min(wl) > 500:
             midwl = np.mean(wl)
@@ -778,25 +787,25 @@ class App(QtGui.QMainWindow):
                 amp = pm.Normal("amp",mu=(bounds[0][0]+bounds[0][1])/2,sigma=0.8*(bounds[0][1] - bounds[0][0]),testval=bounds[0][1]/2)
                 centroid = pm.Normal("centroid",mu=(bounds[1][0]+bounds[1][1])/2,sigma=0.8*(bounds[1][1] - bounds[1][0]))
                 sigma = pm.TruncatedNormal("sigma",mu=(bounds[2][0]+bounds[2][1])/2,sigma=0.4*(bounds[2][1] - bounds[2][0]),testval=(bounds[2][0]+bounds[2][1])/2,lower=0)
-                #cont_amp = pm.Normal("cont_amp",mu=(bounds[3][0]+bounds[3][1])/2,sigma=0.8*(bounds[3][1] - bounds[3][0]),testval=(bounds[3][0]+bounds[3][1])/2)#,lower=0.0000001)
+                cont_amp = pm.Normal("cont_amp",mu=(bounds[3][0]+bounds[3][1])/2,sigma=0.8*(bounds[3][1] - bounds[3][0]),testval=(bounds[3][0]+bounds[3][1])/2)#,lower=0.0000001)
                 alpha = pm.TruncatedNormal("alpha",mu=(bounds[4][0]+bounds[4][1])/2,sigma=0.8*(bounds[4][1] - bounds[4][0]),testval=(bounds[4][0]+bounds[4][1])/2,lower=-5,upper=5)
-                #unity = pm.TruncatedNormal("unity",mu=(bounds[5][0]+bounds[5][1])/2,sigma=0.8*(bounds[5][1] - bounds[5][0]),testval=(bounds[5][0]+bounds[5][1])/2,lower=leftun,upper=rghtun)
+                unity = pm.TruncatedNormal("unity",mu=(bounds[5][0]+bounds[5][1])/2,sigma=0.8*(bounds[5][1] - bounds[5][0]),testval=(bounds[5][0]+bounds[5][1])/2,lower=leftun,upper=rghtun)
                 
                 mu = [(bounds[i][0] + bounds[i][1]/2) for i in range(len(bounds))]
                 sig = [0.8*(bounds[i][1] - bounds[i][0]) for i in range(len(bounds))]
                 #amp_0 = pm.Normal("amp_0",mu=0,sigma=1)
                 #cent_0 = pm.Normal("cent_0",mu=0,sigma=1)
                 #sig_0 = pm.Normal("sig_0",mu=0,sigma=1)
-                cont_0 = pm.Normal("cont_0",mu=0,sigma=1)
+                #b = pm.Normal("b",mu=(bounds[5][0]+bounds[5][1])/2,sigma=1000)
                 #alph_0 = pm.Normal("alph_0",mu=0,sigma=1)
-                un_0 = pm.Normal("un_0",mu=0,sigma=1)
+                #a = pm.Normal("a",mu=-2,sigma=5)
 
                 #amp = pm.Deterministic("amp",mu[0] + sig[0]*amp_0)
                 #centroid = pm.Deterministic("centroid",mu[1] + sig[1]*cent_0)
                 #sigma = pm.Deterministic("sigma",mu[2] + sig[2]*sig_0)
-                cont_amp = pm.Deterministic("cont_amp",mu[3] + sig[3]*cont_0)
+                #cont_amp = pm.Deterministic("cont_amp",mu[3] + sig[3]*cont_0)
                 #alpha = pm.Deterministic("alpha",mu[4] + sig[4]*alph_0)
-                unity = pm.Deterministic("unity",mu[5] + sig[5]*un_0)
+                #unity = pm.Deterministic("unity",4000*cont_amp**(alpha))
 
                 #TODO: consider using non-centered reparameterization, i.e. amp = mu + sigma*amp_0, where amp_0 ~ N(0,1)
                 #use 540 as example case
@@ -807,15 +816,13 @@ class App(QtGui.QMainWindow):
             Y_obs = pm.Normal("Y_obs",mu=mu,sigma=err.astype(np.float32),observed=flux.astype(np.float32))
             
             #trace = pm.sample(20000,tune=5000,cores=6,init='adapt_diag',step=pm.step_methods.Metropolis())#used for testing parameter space
-            trace = pm.sample(17000,tune=10000,target_accept=0.80,cores=6,init='adapt_diag')
+            trace = pm.sample(3000,tune=1000,target_accept=0.80,cores=6,init='adapt_diag')
             #vals = az.summary(trace,round_to=10)#NOTE: vals['mean'].keys() gives the parameter names
-            #embed()
             if cname == "Power Law":
                 vals = az.summary(trace,round_to=10,var_names=['amp','alpha','unity'])
             elif name == "EW":
                 vals = az.summary(trace,round_to=10,var_names=['amp','centroid','sigma','cont_amp','alpha','unity'])
             samples = pm.trace_to_dataframe(trace,varnames=vals['mean'].keys())
-            #embed()
             az.plot_trace(trace,var_names=vals['mean'].keys())
             pm.pairplot(trace,divergences=False,var_names=vals['mean'].keys())
             plt.show()
@@ -839,7 +846,8 @@ class App(QtGui.QMainWindow):
             pen = (0,100,0)
             cont = 1.0
             #This is used for GUI image such that we can see the fit
-            #TODO: the whole self.fit train of thought is very kludgy, need to come up with cleaner method   
+            #TODO: the whole self.fit train of thought is very kludgy, need to come up with cleaner method  
+        self.arviz = trace 
         self.plt[plt_name].plot(data[0].getData()[0],cont*func(data[0].getData()[0],*vals['mean']),pen=pen)
         del(basic_model)
         
@@ -847,6 +855,57 @@ class App(QtGui.QMainWindow):
     #Fitting results. Should consider allowing user to adjust parameterization
     #but should make this a visual thing (It would be helpful to output the sigma
     # compared with the original choice for sigma in the normal distribution)
+    def arviz_density(self):
+        """
+        show density plot
+        """
+        az.plot_density(self.arviz)
+        plt.show()
+
+    def arviz_autocorrelation(self):
+        '''
+        show autocorrelation plot
+        '''
+        az.plot_autocorr(self.arviz)
+        plt.show()
+
+    def arviz_energy(self):
+        '''
+        show energy plot
+        '''
+        az.plot_energy(self.arviz)
+        plt.show()
+
+    def arviz_forest(self):
+        '''
+        show forest plot
+        '''
+        az.plot_forest(self.arviz)
+        plt.show()
+
+    def arviz_joint(self):
+        '''
+        essentially a corner plot with marginals=True
+        '''
+        az.plot_pair(self.arviz,kind='hexbin')
+        plt.show()
+
+    def arviz_parallel(self):
+        '''
+        show parallel plot
+        '''
+        az.plot_parallel(self.arviz)
+        plt.show()
+
+    def arviz_trace(self):
+        '''
+        show outcome of run
+        '''
+        az.plot_trace(self.arviz)
+        plt.show()
+
+
+
     def Flux_to_Lum(self):
 
         choice, ok = qt.QInputDialog.getItem(self,"Which plot","Choose data set:",self.names1d,0,False)

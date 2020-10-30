@@ -25,4 +25,12 @@ def buttons(self):
         self.contBut = qt.QPushButton("Fit Cont", self)
         self.getFitsBut = qt.QPushButton("Get Fits",self)
         self.fluxToLum = qt.QPushButton("F to L",self)
+        self.Math = qt.QPushButton("Math",self)
+        self.aztrace = qt.QPushButton("Show Trace",self)
+        self.azdensity = qt.QPushButton("Show Density",self)
+        self.azautocorr = qt.QPushButton("Show Autocorrelation",self)
+        self.azenergy = qt.QPushButton("Show Energy",self)
+        self.azforest = qt.QPushButton("Show Forest",self)
+        self.azjoint = qt.QPushButton("Show Joint",self)
+        self.azparallel = qt.QPushButton("Show Parallel",self)
         return

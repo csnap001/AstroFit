@@ -25,4 +25,12 @@ def connect(self):
         self.addReg.clicked.connect(self.whichPlot)
         self.remReg.clicked.connect(self.removeRegPlot)
         self.fluxToLum.clicked.connect(self.Flux_to_Lum)
+        self.Math.clicked.connect(self.Data_operations)
+        self.aztrace.clicked.connect(self.arviz_trace)
+        self.azdensity.clicked.connect(self.arviz_density)
+        self.azautocorr.clicked.connect(self.arviz_autocorrelation)
+        self.azenergy.clicked.connect(self.arviz_energy)
+        self.azforest.clicked.connect(self.arviz_forest)
+        self.azjoint.clicked.connect(self.arviz_joint)
+        self.azparallel.clicked.connect(self.arviz_parallel)
         return
