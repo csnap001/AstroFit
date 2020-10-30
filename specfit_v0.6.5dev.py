@@ -823,9 +823,6 @@ class App(QtGui.QMainWindow):
             elif name == "EW":
                 vals = az.summary(trace,round_to=10,var_names=['amp','centroid','sigma','cont_amp','alpha','unity'])
             samples = pm.trace_to_dataframe(trace,varnames=vals['mean'].keys())
-            az.plot_trace(trace,var_names=vals['mean'].keys())
-            pm.pairplot(trace,divergences=False,var_names=vals['mean'].keys())
-            plt.show()
 
         
         if name == 'continuum':
