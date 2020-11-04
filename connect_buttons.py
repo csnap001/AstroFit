@@ -33,4 +33,5 @@ def connect(self):
         self.azforest.clicked.connect(self.arviz_forest)
         self.azjoint.clicked.connect(self.arviz_joint)
         self.azparallel.clicked.connect(self.arviz_parallel)
+        self.save.clicked.connect(self.save_data)
         return

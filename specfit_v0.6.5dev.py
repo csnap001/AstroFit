@@ -5,6 +5,7 @@ TODO: Rename the file so that it better describes its use.
 TODO: add "clear screen" option for clearing displays
 TODO: Add threading of functions to allow continued functionality of other QtGui objects
 TODO: Add progress bar for fits: self.progress = QtGui.ProgressBar(self) -> self.progress.setValue(**some increasing number**)
+This is a difficult task, as pymc3 holds all this info internally and doesn't appear to allow for access
 TODO: 2 primary functions need to be built. 1: need non-parameterized equivalent width determination
 2: Need line center determination. use paper that fred sent (find the first moment)
 generally speaking there is more to be done than this, but this will be sufficient for now
@@ -13,7 +14,7 @@ Should write out and organize my thoughts on this.
 TODO: Should save data to files as well (.dat?)
 TODO: Add operations to data elements (mostly to account for inverse variance stuff)
 
-Module for GUI spectroscopic fitting environment based on specutils
+Module for GUI spectroscopic fitting environment based on pymc3
 and astropy. (Possibly, desired) This module will also have basic image arithmatic capabilities.
 
 Meta data:
@@ -51,6 +52,7 @@ import corner
 import scipy as sc
 from IPython import embed
 from astropy import cosmology
+import pickle
 
 
 class App(QtGui.QMainWindow):
@@ -104,9 +106,10 @@ class App(QtGui.QMainWindow):
         self.ewBounds = None
         #TODO: should save to a file placed wherever the user desires
         #TODO: other fits? 2d likely, but this will be done later. what about 1d?
-        self.fit = []
 
-        
+        #NOTE: self.arviz will hold the data used in arviz visualizations. also for saving data
+        self.arviz = {}
+
 
     def initUI(self):
         
@@ -131,7 +134,6 @@ class App(QtGui.QMainWindow):
         self.dTable.addWidget(self.table)
         self.dtool.hideTitleBar()
         
-        self.fitProgress = QtGui.QProgressBar(self)
         #Creating buttons
         cb.buttons(self)
 
@@ -152,9 +154,11 @@ class App(QtGui.QMainWindow):
 
     #TODO: need to be able to update each region not just the most recent
     def updateLR(self):
+        #TODO: The y-range for each plot is only connected to the most recent region, why?
         for i in range(len(self.lrs)):
             if self.lrs[i].sigRegionChanged:
-                self.lrs[i].setRegion(self.regPlot[i].getViewBox().viewRange()[0])
+                xlen = self.lrs[i].getRegion()
+                self.lrs[i].setRegion(xlen)
                 abdata = self.regPlot[i].listDataItems()
                 data = (abdata[0].getData()[0],abdata[0].getData()[1],abdata[1].getData()[1])
                 mask = (data[0] > self.regPlot[i].getViewBox().viewRange()[0][0]) & (data[0] < self.regPlot[i].getViewBox().viewRange()[0][1])
@@ -303,8 +307,6 @@ class App(QtGui.QMainWindow):
             pass
 
 
-    #TODO: Should also check data dimensions to ensure that the input file is not
-    # an image file. Must force one dimensional spectrum data
     #NOTE: Each fits file extension (i.e. hdul[1]) as an NAXIS memeber that states the 
     # number of data axes. So in bill's data the header has NAXIS = 1 and then in the 
     # image files we have NAXIS = 2. We can use this to implement restrictions
@@ -451,6 +453,11 @@ class App(QtGui.QMainWindow):
             if self.lrs[i].sigRegionChanged:
                 self.regPlot[i].setXRange(*self.lrs[i].getRegion(),padding=0)
                 self.regPlot[i].setYRange(self.yrange[0],self.yrange[1],padding=0)
+                plots = self.regPlot[i].listDataItems()
+                plots[0].setPen('w')
+                plots[1].setPen('r')
+                #TODO: make these colors user defined. create some variable that 
+                # the user can update, i.e. self.LRerrColor and self.LRfluxColor
 
     def whichPlot(self):
         choice, ok = qt.QInputDialog.getItem(self,"Adding region","Which plot?:",np.arange(len(self.plt),dtype=str),0,False)
@@ -461,7 +468,10 @@ class App(QtGui.QMainWindow):
         xlen = self.plt[chosen].getViewBox().viewRange()[0]#first element is the bounds of the x-axis data
         #TODO: the logic here is not great as it doesn't delineate linear regions of different plots
         #Need to set linear regions as children of plots (in some sense)
-        self.lrs.append(pg.LinearRegionItem(xlen))
+        xran = np.sort(np.random.normal(np.mean(xlen),0.03*(xlen[1]-xlen[0]),size=(2)))
+        #NOTE: xran is used to force the bounds of the linear region to be around the 
+        # mean of the domain
+        self.lrs.append(pg.LinearRegionItem(xran))
         count = len(self.lrs)
         self.plt[chosen].addItem(self.lrs[count-1])
         abdata = self.plt[chosen].listDataItems()
@@ -787,25 +797,10 @@ class App(QtGui.QMainWindow):
                 amp = pm.Normal("amp",mu=(bounds[0][0]+bounds[0][1])/2,sigma=0.8*(bounds[0][1] - bounds[0][0]),testval=bounds[0][1]/2)
                 centroid = pm.Normal("centroid",mu=(bounds[1][0]+bounds[1][1])/2,sigma=0.8*(bounds[1][1] - bounds[1][0]))
                 sigma = pm.TruncatedNormal("sigma",mu=(bounds[2][0]+bounds[2][1])/2,sigma=0.4*(bounds[2][1] - bounds[2][0]),testval=(bounds[2][0]+bounds[2][1])/2,lower=0)
-                cont_amp = pm.Normal("cont_amp",mu=(bounds[3][0]+bounds[3][1])/2,sigma=0.8*(bounds[3][1] - bounds[3][0]),testval=(bounds[3][0]+bounds[3][1])/2)#,lower=0.0000001)
+                cont_amp = pm.TruncatedNormal("cont_amp",mu=(bounds[3][0]+bounds[3][1])/2,sigma=0.8*(bounds[3][1] - bounds[3][0]),testval=(bounds[3][0]+bounds[3][1])/2,lower=0.0000001)
                 alpha = pm.TruncatedNormal("alpha",mu=(bounds[4][0]+bounds[4][1])/2,sigma=0.8*(bounds[4][1] - bounds[4][0]),testval=(bounds[4][0]+bounds[4][1])/2,lower=-5,upper=5)
                 unity = pm.TruncatedNormal("unity",mu=(bounds[5][0]+bounds[5][1])/2,sigma=0.8*(bounds[5][1] - bounds[5][0]),testval=(bounds[5][0]+bounds[5][1])/2,lower=leftun,upper=rghtun)
-                
-                mu = [(bounds[i][0] + bounds[i][1]/2) for i in range(len(bounds))]
-                sig = [0.8*(bounds[i][1] - bounds[i][0]) for i in range(len(bounds))]
-                #amp_0 = pm.Normal("amp_0",mu=0,sigma=1)
-                #cent_0 = pm.Normal("cent_0",mu=0,sigma=1)
-                #sig_0 = pm.Normal("sig_0",mu=0,sigma=1)
-                #b = pm.Normal("b",mu=(bounds[5][0]+bounds[5][1])/2,sigma=1000)
-                #alph_0 = pm.Normal("alph_0",mu=0,sigma=1)
-                #a = pm.Normal("a",mu=-2,sigma=5)
 
-                #amp = pm.Deterministic("amp",mu[0] + sig[0]*amp_0)
-                #centroid = pm.Deterministic("centroid",mu[1] + sig[1]*cent_0)
-                #sigma = pm.Deterministic("sigma",mu[2] + sig[2]*sig_0)
-                #cont_amp = pm.Deterministic("cont_amp",mu[3] + sig[3]*cont_0)
-                #alpha = pm.Deterministic("alpha",mu[4] + sig[4]*alph_0)
-                #unity = pm.Deterministic("unity",4000*cont_amp**(alpha))
 
                 #TODO: consider using non-centered reparameterization, i.e. amp = mu + sigma*amp_0, where amp_0 ~ N(0,1)
                 #use 540 as example case
@@ -816,8 +811,8 @@ class App(QtGui.QMainWindow):
             Y_obs = pm.Normal("Y_obs",mu=mu,sigma=err.astype(np.float32),observed=flux.astype(np.float32))
             
             #trace = pm.sample(20000,tune=5000,cores=6,init='adapt_diag',step=pm.step_methods.Metropolis())#used for testing parameter space
-            trace = pm.sample(3000,tune=1000,target_accept=0.80,cores=6,init='adapt_diag')
-            #vals = az.summary(trace,round_to=10)#NOTE: vals['mean'].keys() gives the parameter names
+            trace = pm.sample(10000,tune=5000,target_accept=0.80,cores=10,init='adapt_diag')
+            #NOTE: vals['mean'].keys() gives the parameter names
             if cname == "Power Law":
                 vals = az.summary(trace,round_to=10,var_names=['amp','alpha','unity'])
             elif name == "EW":
@@ -842,63 +837,98 @@ class App(QtGui.QMainWindow):
             self.pdfs['EWPDF'] = [ewPdf,pd.core.series.Series([ewMeas],index=["EW"])]
             pen = (0,100,0)
             cont = 1.0
-            #This is used for GUI image such that we can see the fit
-            #TODO: the whole self.fit train of thought is very kludgy, need to come up with cleaner method  
-        self.arviz = trace 
+            #This is used for GUI image such that we can see the fit 
+        self.arviz[name] = trace 
         self.plt[plt_name].plot(data[0].getData()[0],cont*func(data[0].getData()[0],*vals['mean']),pen=pen)
         del(basic_model)
         
-    #TODO: add in more arviz visualizations. This can help with interpreting
-    #Fitting results. Should consider allowing user to adjust parameterization
+    #TODO: Should consider allowing user to adjust parameterization
     #but should make this a visual thing (It would be helpful to output the sigma
     # compared with the original choice for sigma in the normal distribution)
+    def save_data(self):
+        '''
+        routine to save parameter fits to .fits file
+        '''
+        choice, ok = qt.QInputDialog.getItem(self,"Which run?","choose a data set:",self.arviz.keys(),0,False)
+        if not(ok):
+            return
+        dat_to_save = self.arviz[choice]
+        name, ok = qt.QInputDialog.getText(self,"Filename","Name the fits file:")
+        if not(ok):
+            return
+        with open(name,'wb') as output:
+            pickle.dump(dat_to_save,output,pickle.HIGHEST_PROTOCOL)
+        #TODO: only saves to specGUI. need to figure out how to choose save location
+        
+        
     def arviz_density(self):
         """
         show density plot
         """
-        az.plot_density(self.arviz)
+        choice, ok = qt.QInputDialog.getItem(self,"Which run?","choose a data set:",self.arviz.keys(),0,False)
+        if not(ok):
+            return
+        az.plot_density(self.arviz[choice])
         plt.show()
 
     def arviz_autocorrelation(self):
         '''
         show autocorrelation plot
         '''
-        az.plot_autocorr(self.arviz)
+        choice, ok = qt.QInputDialog.getItem(self,"Which run?","choose a data set:",self.arviz.keys(),0,False)
+        if not(ok):
+            return
+        az.plot_autocorr(self.arviz[choice])
         plt.show()
 
     def arviz_energy(self):
         '''
         show energy plot
         '''
-        az.plot_energy(self.arviz)
+        choice, ok = qt.QInputDialog.getItem(self,"Which run?","choose a data set:",self.arviz.keys(),0,False)
+        if not(ok):
+            return
+        az.plot_energy(self.arviz[choice])
         plt.show()
 
     def arviz_forest(self):
         '''
         show forest plot
         '''
-        az.plot_forest(self.arviz)
+        choice, ok = qt.QInputDialog.getItem(self,"Which run?","choose a data set:",self.arviz.keys(),0,False)
+        if not(ok):
+            return
+        az.plot_forest(self.arviz[choice])
         plt.show()
 
     def arviz_joint(self):
         '''
         essentially a corner plot with marginals=True
         '''
-        az.plot_pair(self.arviz,kind='hexbin')
+        choice, ok = qt.QInputDialog.getItem(self,"Which run?","choose a data set:",self.arviz.keys(),0,False)
+        if not(ok):
+            return
+        az.plot_pair(self.arviz[choice],kind=['hexbin',"kde"],kde_kwargs={"fill_last":False},marginals=True,point_estimate="mean")
         plt.show()
 
     def arviz_parallel(self):
         '''
         show parallel plot
         '''
-        az.plot_parallel(self.arviz)
+        choice, ok = qt.QInputDialog.getItem(self,"Which run?","choose a data set:",self.arviz.keys(),0,False)
+        if not(ok):
+            return
+        az.plot_parallel(self.arviz[choice])
         plt.show()
 
     def arviz_trace(self):
         '''
         show outcome of run
         '''
-        az.plot_trace(self.arviz)
+        choice, ok = qt.QInputDialog.getItem(self,"Which run?","choose a data set:",self.arviz.keys(),0,False)
+        if not(ok):
+            return
+        az.plot_trace(self.arviz[choice])
         plt.show()
 
 

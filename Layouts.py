@@ -24,6 +24,7 @@ def Lay(self):
         self.dtool.addWidget(self.lincent,row=1,col=3)
         self.dtool.addWidget(self.fluxToLum,row=1,col=4)
         self.dtool.addWidget(self.Math,row=1,col=5)
+        self.dtool.addWidget(self.save,row=1,col=6)
         self.dtool.addWidget(self.aztrace,row=2,col=0)
         self.dtool.addWidget(self.azdensity,row=2,col=1)
         self.dtool.addWidget(self.azautocorr,row=2,col=2)
