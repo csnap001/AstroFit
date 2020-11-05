@@ -856,8 +856,14 @@ class App(QtGui.QMainWindow):
         name, ok = qt.QInputDialog.getText(self,"Filename","Name the fits file:")
         if not(ok):
             return
+        dir_ = QtGui.QFileDialog.getExistingDirectory(self, 'Select a folder:', 'C:\\', QtGui.QFileDialog.ShowDirsOnly)
+        if len(dir_) == 0:
+            return
+        cwd = os.getcwd()
+        os.chdir(dir_)
         with open(name,'wb') as output:
             pickle.dump(dat_to_save,output,pickle.HIGHEST_PROTOCOL)
+        os.chdir(cwd)
         #TODO: only saves to specGUI. need to figure out how to choose save location
         
         
