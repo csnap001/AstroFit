@@ -776,8 +776,8 @@ class App(QtGui.QMainWindow):
             #NOTE: these are elements in vals in the order they appear in the code
             if name == "continuum":
                 if cname == "Power Law":
-                    amp = pm.Normal("amp",mu=(bounds[0][0]+bounds[0][1])/2,sigma=0.8*(bounds[0][1]-bounds[0][0]),testval=(bounds[0][0]+bounds[0][1])/2)
-                    alpha = pm.TruncatedNormal("alpha",mu=(bounds[1][0]+bounds[1][1])/2,sigma=0.8*(bounds[1][1]-bounds[1][0]),testval=(bounds[1][0]+bounds[1][1])/2,lower=-5,upper=8)
+                    amp = pm.TruncatedNormal("amp",mu=(bounds[0][0]+bounds[0][1])/2,sigma=0.8*(bounds[0][1]-bounds[0][0]),testval=(bounds[0][0]+bounds[0][1])/2,lower=0.0000001)
+                    alpha = pm.TruncatedNormal("alpha",mu=(bounds[1][0]+bounds[1][1])/2,sigma=0.8*(bounds[1][1]-bounds[1][0]),testval=(bounds[1][0]+bounds[1][1])/2,lower=-5,upper=5)
                     unity = pm.TruncatedNormal("unity",mu=(bounds[2][0]+bounds[2][1])/2,sigma=0.8*(bounds[2][1]-bounds[2][0]),testval=(bounds[2][0]+bounds[2][1])/2,lower=leftun,upper=rghtun)
                     #Expected value
                     mu = func(wl.astype(np.float32),amp,alpha,unity)
@@ -822,15 +822,18 @@ class App(QtGui.QMainWindow):
         
         if name == 'continuum':
             self.contfit[0].append(vals['mean'])
+            name = self.cname + self.names1d[plt_name]
             if name in self.pdfs.keys():
-                name = self.cname + name #adding on extra name to differentiate continuum, won't work indefinitly
+                name = name + ".1" #TODO: need to allow for more names, though probably want to limit to not eat up all the memory
             self.pdfs[name] = (samples,vals['mean'])
-            #self.prior.append(func(wl,*params))
             pen = (50,200,50) # sets the color of the line, TODO: Should make this user adjustable
             cont = 1.0
         
         if name == 'EW':
             self.ewfit.append(vals['mean'])
+            name += self.names1d[plt_name]
+            if name in self.pdfs.keys():
+                name += ".1"
             self.pdfs[name] = (samples,vals['mean'])
             ewPdf = np.sqrt(2*np.pi)*np.array(samples['amp'])*np.array(samples['sigma'])/fxn.Pow(vals['mean']['centroid'],samples['cont_amp'],samples['alpha'],samples['unity'])
             ewMeas = np.sqrt(2*np.pi)*vals['mean']['amp']*vals['mean']['sigma']/fxn.Pow(vals['mean']['centroid'],vals['mean']['cont_amp'],vals['mean']['alpha'],vals['mean']['unity'])
