@@ -333,7 +333,6 @@ class App(QtGui.QMainWindow):
     def plot_1d_fits(self,fileName=""):
         count = len(self.plt) - 1
         #TODO: add legend (should be done for fits as well). legend = pg.LegendItem, legend.setParentItem(self.plot_view)
-        #TODO: add title as filename that has been opened and plotted
         data = []
         if fileName:
             hdul = fits.open(fileName)
