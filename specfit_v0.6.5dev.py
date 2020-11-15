@@ -659,7 +659,7 @@ class App(QtGui.QMainWindow):
             peakFl = flux[mask][index]
             #peakFl = flux[altmask][index]
         
-            zB = ((peakWl - 0.2*peakWl), (peakWl + 0.2*peakWl))
+            zB = ((peakWl - 0.01*peakWl), (peakWl + 0.01*peakWl))
             zB = (zB[0][0],zB[1][0])#necessary b/c zB is created as array of arrays and numpy fails with array inputs
             sigB = (0.01, 15)
             ampB = (0,4*peakFl)
@@ -800,7 +800,7 @@ class App(QtGui.QMainWindow):
                 alpha = pm.TruncatedNormal("alpha",mu=(bounds[4][0]+bounds[4][1])/2,sigma=0.8*(bounds[4][1] - bounds[4][0]),testval=(bounds[4][0]+bounds[4][1])/2,lower=-5,upper=5)
                 unity = pm.TruncatedNormal("unity",mu=(bounds[5][0]+bounds[5][1])/2,sigma=0.8*(bounds[5][1] - bounds[5][0]),testval=(bounds[5][0]+bounds[5][1])/2,lower=leftun,upper=rghtun)
 
-
+                embed()
                 #TODO: consider using non-centered reparameterization, i.e. amp = mu + sigma*amp_0, where amp_0 ~ N(0,1)
                 #use 540 as example case
 
