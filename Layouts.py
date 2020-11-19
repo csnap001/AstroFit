@@ -32,3 +32,4 @@ def Lay(self):
         self.dtool.addWidget(self.azforest,row=2,col=4)
         self.dtool.addWidget(self.azjoint,row=2,col=5)
         self.dtool.addWidget(self.azparallel,row=2,col=6)
+        self.dtool.addWidget(self.azposterior,row=2,col=7)

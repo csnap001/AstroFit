@@ -658,8 +658,8 @@ class App(QtGui.QMainWindow):
             #peakWl = wl[altmask][index]
             peakFl = flux[mask][index]
             #peakFl = flux[altmask][index]
-        
-            zB = ((peakWl - 0.2*peakWl), (peakWl + 0.2*peakWl))
+            
+            zB = ((peakWl - 0.1*peakWl), (peakWl + 0.1*peakWl))
             zB = (zB[0][0],zB[1][0])#necessary b/c zB is created as array of arrays and numpy fails with array inputs
             sigB = (0.01, 15)
             ampB = (0,4*peakFl)
@@ -800,7 +800,7 @@ class App(QtGui.QMainWindow):
                 alpha = pm.TruncatedNormal("alpha",mu=(bounds[4][0]+bounds[4][1])/2,sigma=0.8*(bounds[4][1] - bounds[4][0]),testval=(bounds[4][0]+bounds[4][1])/2,lower=-5,upper=5)
                 unity = pm.TruncatedNormal("unity",mu=(bounds[5][0]+bounds[5][1])/2,sigma=0.8*(bounds[5][1] - bounds[5][0]),testval=(bounds[5][0]+bounds[5][1])/2,lower=leftun,upper=rghtun)
 
-                embed()
+                #embed()
                 #TODO: consider using non-centered reparameterization, i.e. amp = mu + sigma*amp_0, where amp_0 ~ N(0,1)
                 #use 540 as example case
 
@@ -939,6 +939,12 @@ class App(QtGui.QMainWindow):
         az.plot_trace(self.arviz[choice])
         plt.show()
 
+    def arviz_plot_posterior(self):
+        choice, ok = qt.QInputDialog.getItem(self,"Which run?","choose a data set:",self.arviz.keys(),0,False)
+        if not(ok):
+            return
+        az.plot_posterior(self.arviz[choice])
+        plt.show()
 
 
     def Flux_to_Lum(self):

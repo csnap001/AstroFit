@@ -33,5 +33,6 @@ def buttons(self):
         self.azforest = qt.QPushButton("Show Forest",self)
         self.azjoint = qt.QPushButton("Show Joint",self)
         self.azparallel = qt.QPushButton("Show Parallel",self)
+        self.azposterior = qt.QPushButton("Show Posterior",self)
         self.save = qt.QPushButton("Save Data",self)
         return
