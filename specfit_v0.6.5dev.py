@@ -845,7 +845,7 @@ class App(QtGui.QMainWindow):
         del(basic_model)
         
     #TODO: Should consider allowing user to adjust parameterization
-    #but should make this a visual thing (It would be helpful to output the sigma
+    #but should make this a visual thing like a slider bar (It would be helpful to output the sigma
     # compared with the original choice for sigma in the normal distribution)
     def save_data(self):
         '''
