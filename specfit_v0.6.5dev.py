@@ -11,8 +11,12 @@ TODO: 2 primary functions need to be built. 1: need non-parameterized equivalent
 generally speaking there is more to be done than this, but this will be sufficient for now
 TODO: Re-organize storage of data. There should be meta-data fxns that feed to data analysis fxns
 Should write out and organize my thoughts on this. 
-TODO: Should save data to files as well (.dat?)
+TODO: Should save data to files as well (.dat?), currently using pickle, works for me but not generally what people
+will want
 TODO: Add operations to data elements (mostly to account for inverse variance stuff)
+
+TODO: Add in Stellar population synthesis model plotting from Hoki (which is a wrapper to BPASS)
+This likely needs more work with data containers to help out with the workflow of the code
 
 Module for GUI spectroscopic fitting environment based on pymc3
 and astropy. (Possibly, desired) This module will also have basic image arithmatic capabilities.
