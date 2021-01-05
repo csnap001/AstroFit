@@ -350,12 +350,14 @@ class App(QtGui.QMainWindow):
             self.headerDisplay(hdul)
             #embed()
             while True:
-                x, ok = qt.QInputDialog.getItem(self,"data","Choose your x axis:",[data[1].columns[i].name for i in range(len(data[1].columns))],0,False)
-                y, ok = qt.QInputDialog.getItem(self,"data","Choose your y axis:",[data[1].columns[i].name for i in range(len(data[1].columns))],0,False)
-                err, ok = qt.QInputDialog.getItem(self,"data","Choose your err axis:",[data[1].columns[i].name for i in range(len(data[1].columns))],0,False)
-                x = data[1][x]
-                y = data[1][y]
-                err = data[1][err]
+                E, ok = qt.QInputDialog.getItem(self,"Which spectrum?","choose extension",[str(i) for i in np.arange(len(data)+1)],0,False)
+                E = int(E)
+                x, ok = qt.QInputDialog.getItem(self,"data","Choose your x axis:",[data[E].columns[i].name for i in range(len(data[E].columns))],0,False)
+                y, ok = qt.QInputDialog.getItem(self,"data","Choose your y axis:",[data[E].columns[i].name for i in range(len(data[E].columns))],0,False)
+                err, ok = qt.QInputDialog.getItem(self,"data","Choose your err axis:",[data[E].columns[i].name for i in range(len(data[E].columns))],0,False)
+                x = data[E][x]
+                y = data[E][y]
+                err = data[E][err]
                 if (x is not None) and (y is not None): self.updatePlot(count,x,y,err)
                 else: qt.QMessageBox.about(self,"Showing {0},{1}".format(x,y),"One data set is not valid")
                 Happy, ok = qt.QInputDialog.getItem(self,"Good","Happy?:",["True","False"],0,False)
