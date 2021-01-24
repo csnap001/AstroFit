@@ -44,9 +44,7 @@ import Initialize_View_Widgets as IVW
 from Layouts import Lay
 from Get_Pix_Position import Pos, off
 import time
-from My_Packages import MCMC_fine_tuning as mcmc
 from My_Packages import FuncDef as fxn
-from My_Packages import confidence as conf
 import pymc3 as pm
 import arviz as az
 import matplotlib.pyplot as plt
