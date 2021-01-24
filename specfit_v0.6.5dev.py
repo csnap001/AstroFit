@@ -135,7 +135,7 @@ class App(QtGui.QMainWindow):
         self.regDock.addWidget(self.regWin)
         self.dTable.addWidget(self.table)
         self.dtool.hideTitleBar()
-        
+        self.Gwin1d.setBackground('w')
         #Creating buttons
         cb.buttons(self)
 
