@@ -56,6 +56,28 @@ from IPython import embed
 from astropy import cosmology
 import pickle
 
+def conf_low(data,half=0.34):
+    mean = np.mean(data)
+    sd = np.std(data)
+    kde = sc.stats.gaussian_kde(data,0.05)
+    i = 0
+    conf = 0
+    while conf < half:
+        i += 1
+        conf = kde.integrate_box_1d(mean-i*0.01*sd,mean)
+    return mean - i*0.01*sd
+
+def conf_high(data,half=0.34):
+    mean = np.mean(data)
+    sd = np.std(data)
+    kde = sc.stats.gaussian_kde(data,0.05)
+    i = 0
+    conf = 0
+    while conf < half:
+        i += 1
+        conf = kde.integrate_box_1d(mean,mean+i*0.01*sd)
+    return mean + i*0.01*sd
+
 
 class App(QtGui.QMainWindow):
 
@@ -87,10 +109,7 @@ class App(QtGui.QMainWindow):
         self.isMask = False
         self.Mask = []
 
-        self.xpos = None
-        self.ypos = None
-        self.Lbound = None
-        self.Rbound = None
+
         self.ximg = []
         self.yimg = []
         self.initUI()
@@ -391,8 +410,8 @@ class App(QtGui.QMainWindow):
                 data_names[name] = np.sqrt(data_names[name])
 
             self.plt[dat_choice].clear()
-            self.plt[dat_choice].plot(data_names['wl'],data_names['flux'],pen='b')
-            self.plt[dat_choice].plot(data_names['wl'],data_names['err'])
+            self.flux = self.plt[dat_choice].plot(data_names['wl'],data_names['flux'],pen='b')
+            self.err = self.plt[dat_choice].plot(data_names['wl'],data_names['err'])
 
             Happy, ok = qt.QInputDialog.getItem(self,"Good","Finished?:",["True","False"],0,False)
             if Happy:
@@ -635,15 +654,17 @@ class App(QtGui.QMainWindow):
                     wlHeII = 1640*(1+z)#TODO: re-impliment using list of lines instead
                     wlOIII = 1665*(1+z)
                     wlCIII = 1908*(1+z)
+                    wlOIV = 1343*(1+z)
                     c = 3e5 #km/s
                     v = c*(wl-wlCIV)/wlCIV
                     CIVMask = (v > -1000) & (v < 400)
                     HeIIMask = (c*(wl-wlHeII)/wlHeII > -400) & (c*(wl-wlHeII)/wlHeII < 400)
                     OIIIMask = (c*(wl-wlOIII)/wlOIII > -400) & (c*(wl-wlOIII)/wlOIII < 400)
                     CIIIMask = (c*(wl-wlCIII)/wlCIII > -400) & (c*(wl-wlCIII)/wlCIII < 400)
-                    #add1 = (wl > 4819) & (wl < 4981)
-                    #add2 = (wl > 5162) & (wl < 5305)
-                    TotMask = CIVMask | HeIIMask | OIIIMask | CIIIMask #| add1 | add2
+                    OIVMask = (c*(wl-wlOIV)/wlOIV > -400) & (c*(wl-wlOIV)/wlOIV < 400)
+                    add1 = (wl > 4720) & (wl < 4750)
+                    add2 = (wl > 4908) & (wl < 4933)
+                    TotMask = CIVMask | HeIIMask | OIIIMask | CIIIMask | OIVMask | add1 | add2
                     x = wl[TotMask]
                     y = flux[TotMask]
                     CIVscatter = pg.ScatterPlotItem(x=x,y=y,pen=pg.mkPen('g'),brush=pg.mkBrush('g'))
@@ -765,7 +786,7 @@ class App(QtGui.QMainWindow):
         helper function for fitting algorithms (cont_fit, and ew)
         '''
         #TODO: Threading for progress bar? Maybe just add in self.MCMC code block?
-
+        #embed()
         basic_model = pm.Model()
         if np.max(wl) - np.min(wl) > 500:
             midwl = np.mean(wl)
@@ -775,6 +796,7 @@ class App(QtGui.QMainWindow):
             leftun = np.min(wl)
             rghtun = np.max(wl)
         with basic_model:
+            
             #Priors on model
             #NOTE: these are elements in vals in the order they appear in the code
             if name == "continuum":
@@ -782,6 +804,7 @@ class App(QtGui.QMainWindow):
                     amp = pm.TruncatedNormal("amp",mu=(bounds[0][0]+bounds[0][1])/2,sigma=0.8*(bounds[0][1]-bounds[0][0]),testval=(bounds[0][0]+bounds[0][1])/2,lower=0.0000001)
                     alpha = pm.TruncatedNormal("alpha",mu=(bounds[1][0]+bounds[1][1])/2,sigma=0.8*(bounds[1][1]-bounds[1][0]),testval=(bounds[1][0]+bounds[1][1])/2,lower=-5,upper=5)
                     unity = pm.TruncatedNormal("unity",mu=(bounds[2][0]+bounds[2][1])/2,sigma=0.8*(bounds[2][1]-bounds[2][0]),testval=(bounds[2][0]+bounds[2][1])/2,lower=leftun,upper=rghtun)
+                    step = pm.HamiltonianMC()
                     #Expected value
                     mu = func(wl.astype(np.float32),amp,alpha,unity)
                 if cname == "Linear":
@@ -802,19 +825,29 @@ class App(QtGui.QMainWindow):
                 sigma = pm.TruncatedNormal("sigma",mu=(bounds[2][0]+bounds[2][1])/2,sigma=0.4*(bounds[2][1] - bounds[2][0]),testval=(bounds[2][0]+bounds[2][1])/2,lower=0)
                 cont_amp = pm.TruncatedNormal("cont_amp",mu=(bounds[3][0]+bounds[3][1])/2,sigma=0.8*(bounds[3][1] - bounds[3][0]),testval=(bounds[3][0]+bounds[3][1])/2,lower=0.0000001)
                 alpha = pm.TruncatedNormal("alpha",mu=(bounds[4][0]+bounds[4][1])/2,sigma=0.8*(bounds[4][1] - bounds[4][0]),testval=(bounds[4][0]+bounds[4][1])/2,lower=-5,upper=5)
-                unity = pm.TruncatedNormal("unity",mu=(bounds[5][0]+bounds[5][1])/2,sigma=0.8*(bounds[5][1] - bounds[5][0]),testval=(bounds[5][0]+bounds[5][1])/2,lower=leftun,upper=rghtun)
+                unity = pm.TruncatedNormal("unity",mu=(bounds[5][0]+bounds[5][1])/2,sigma=0.2*(bounds[5][1] - bounds[5][0]),testval=(bounds[5][0]+bounds[5][1])/2,lower=leftun,upper=rghtun)
 
                 #embed()
                 #TODO: consider using non-centered reparameterization, i.e. amp = mu + sigma*amp_0, where amp_0 ~ N(0,1)
                 #use 540 as example case
+                step = pm.HamiltonianMC()
 
                 mu = func(wl.astype(np.float32),amp,centroid,sigma,cont_amp,alpha,unity)
-
+            print(basic_model.test_point)
+            print(basic_model.check_test_point())
+            q0 = step._logp_dlogp_func.dict_to_array(basic_model.test_point)
+            p0 = step.potential.random()
+            start = step.integrator.compute_state(q0,p0)
+            print(start.energy)
+            logp,dlogp = step.integrator._logp_dlogp_func(q0)
+            print(logp)
+            print(dlogp)
+            #embed()
             #Likelihood of sampling distribution
             Y_obs = pm.Normal("Y_obs",mu=mu,sigma=err.astype(np.float32),observed=flux.astype(np.float32))
             
             #trace = pm.sample(20000,tune=5000,cores=6,init='adapt_diag',step=pm.step_methods.Metropolis())#used for testing parameter space
-            trace = pm.sample(10000,tune=5000,target_accept=0.80,cores=10,init='adapt_diag')
+            trace = pm.sample(10000,tune=5000,target_accept=0.80,cores=10)
             #NOTE: vals['mean'].keys() gives the parameter names
             if cname == "Power Law":
                 vals = az.summary(trace,round_to=10,var_names=['amp','alpha','unity'])
@@ -920,7 +953,11 @@ class App(QtGui.QMainWindow):
         choice, ok = qt.QInputDialog.getItem(self,"Which run?","choose a data set:",self.arviz.keys(),0,False)
         if not(ok):
             return
-        az.plot_pair(self.arviz[choice],kind=['hexbin',"kde"],kde_kwargs={"fill_last":False},marginals=True,point_estimate="mean")
+        embed()
+        vals = az.summary(self.arviz[choice],round_to=5,stat_funcs=[conf_low,conf_high])#var_names?
+        axes = az.plot_pair(self.arviz[choice],kind=['hexbin',"kde"],kde_kwargs={"fill_last":False},marginals=True,point_estimate="mean",marginal_kwargs={"quantiles":[0.16,0.5,0.84]})
+        for i in range(len(axes)):
+            axes[i][i].set_title(r'${0}={1}_{{{2}}}^{{{3}}}$'.format(vals['mean'].keys()[i],vals['mean'][i],vals['conf_low'][i]-vals['mean'][i],vals['conf_high'][i]-vals['mean'][i]))
         plt.show()
 
     def arviz_parallel(self):
@@ -1024,7 +1061,10 @@ class App(QtGui.QMainWindow):
             self.flux.setPen(color)
         if not(self.err==None) and isErr:
             self.err.setPen(color)
+            #TODO: after using Math unable to change color. 
+            # likely self.err no longer referenced
     
+    #TODO: likely "easy" to setup w/ photutils
     def combine_img_ext(self):
         """
         This will take the images, remove the overscan section, and then combine to 
