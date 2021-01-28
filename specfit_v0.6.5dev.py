@@ -414,7 +414,7 @@ class App(QtGui.QMainWindow):
             self.err = self.plt[dat_choice].plot(data_names['wl'],data_names['err'])
 
             Happy, ok = qt.QInputDialog.getItem(self,"Good","Finished?:",["True","False"],0,False)
-            if Happy:
+            if Happy == "True":
                 break
 
     def get1d_from2d(self):
