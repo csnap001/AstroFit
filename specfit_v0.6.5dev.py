@@ -417,59 +417,6 @@ class App(QtGui.QMainWindow):
             if Happy == "True":
                 break
 
-    def get1d_from2d(self):
-        #likely will call plot_1d_fits. pg.affineSlice might be helpful here
-        pass
-
-    def get_wvlngth(self):
-        #for wavelength solution, use pixmap. likely need get1d_from2d
-        pass
-
-    #TODO: this is currently broken, need method for adding frames to view one by one for multiple frame analysis
-    # See pyqtgraph examples for help on this. Can easily accomplish this with current structure, but not interesting now
-    # using docking
-    #NOTE: for analysis of 2D spectra there exists a fitting algorithm with astropy (astropy.modeling.(fitting,models))
-    # it seems to be good for analysis of flat frams
-    def show_2d_fits(self,fileName = ""):
-        text = ""
-        self.view = self.img_view.addViewBox()
-        while not(text == "Y" or text == "N"):
-            text, _ = qt.QInputDialog.getText(self,"Get text","Multiframe? (Y,N)",qt.QLineEdit.Normal,"")
-            #TODO: How to add to graphicsLayoutWidget?
-            if text == 'Y':
-                if fileName:
-                    isFits = fileName.find('.fits')
-                    data = []
-                    if not(isFits == -1):
-                        f = fits.open(fileName)
-                        for i in range(len(f)-1):
-                            data.append(f[i+1].data)
-                            img = pg.ImageView(view=pg.PlotItem())
-                            print(img)
-                            img.setImage(data[i])
-                            imgt = pg.ImageItem()
-                            lay = qt.QVBoxLayout()
-                            lay.addWidget(img)
-                            imgt.setImage(data[i])
-                            img3 = pg.makeARGB(data[i])
-                            img4 = pg.makeQImage(data[i])
-                            self.img_view.addItem(qt.QPushButton('hello',self))
-                        f.close()
-            elif text == 'N':
-                #This is single frame so add single img
-                if fileName:
-                    isFits = fileName.find('.fits')
-                    self.img_view.clear()
-                    if not(isFits == -1):
-                        f = fits.open(fileName)
-                        img = f[1].data
-                        self.img_view.setImage(img)
-                        f.close()
-            else:
-                msg = qt.QMessageBox()
-                msg.setText('Please choose Y or N')
-                told = msg.exec_()
-    
     def updateLRplot(self):
         for i in range(len(self.regPlot)):
             if self.lrs[i].sigRegionChanged:
@@ -1064,6 +1011,11 @@ class App(QtGui.QMainWindow):
             #TODO: after using Math unable to change color. 
             # likely self.err no longer referenced
     
+    '''
+    NOTE: This begins the 2D image utilities
+    currently these are broken and require setup
+    Not particularly concerned with this currently
+    '''
     #TODO: likely "easy" to setup w/ photutils
     def combine_img_ext(self):
         """
@@ -1088,6 +1040,59 @@ class App(QtGui.QMainWindow):
     def imgDiv(self):
         pass
 
+    def get1d_from2d(self):
+        #likely will call plot_1d_fits. pg.affineSlice might be helpful here
+        pass
+
+    def get_wvlngth(self):
+        #for wavelength solution, use pixmap. likely need get1d_from2d
+        pass
+
+    #TODO: this is currently broken, need method for adding frames to view one by one for multiple frame analysis
+    # See pyqtgraph examples for help on this. Can easily accomplish this with current structure, but not interesting now
+    # using docking
+    #NOTE: for analysis of 2D spectra there exists a fitting algorithm with astropy (astropy.modeling.(fitting,models))
+    # it seems to be good for analysis of flat frams
+    def show_2d_fits(self,fileName = ""):
+        text = ""
+        self.view = self.img_view.addViewBox()
+        while not(text == "Y" or text == "N"):
+            text, _ = qt.QInputDialog.getText(self,"Get text","Multiframe? (Y,N)",qt.QLineEdit.Normal,"")
+            #TODO: How to add to graphicsLayoutWidget?
+            if text == 'Y':
+                if fileName:
+                    isFits = fileName.find('.fits')
+                    data = []
+                    if not(isFits == -1):
+                        f = fits.open(fileName)
+                        for i in range(len(f)-1):
+                            data.append(f[i+1].data)
+                            img = pg.ImageView(view=pg.PlotItem())
+                            print(img)
+                            img.setImage(data[i])
+                            imgt = pg.ImageItem()
+                            lay = qt.QVBoxLayout()
+                            lay.addWidget(img)
+                            imgt.setImage(data[i])
+                            img3 = pg.makeARGB(data[i])
+                            img4 = pg.makeQImage(data[i])
+                            self.img_view.addItem(qt.QPushButton('hello',self))
+                        f.close()
+            elif text == 'N':
+                #This is single frame so add single img
+                if fileName:
+                    isFits = fileName.find('.fits')
+                    self.img_view.clear()
+                    if not(isFits == -1):
+                        f = fits.open(fileName)
+                        img = f[1].data
+                        self.img_view.setImage(img)
+                        f.close()
+            else:
+                msg = qt.QMessageBox()
+                msg.setText('Please choose Y or N')
+                told = msg.exec_()
+    
             
 if __name__ == '__main__':
     app = qt.QApplication(sys.argv)
