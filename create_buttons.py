@@ -35,4 +35,5 @@ def buttons(self):
         self.azparallel = qt.QPushButton("Show Parallel",self)
         self.azposterior = qt.QPushButton("Show Posterior",self)
         self.save = qt.QPushButton("Save Data",self)
+        self.artgauss = qt.QPushButton("Sens EW",self)
         return

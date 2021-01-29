@@ -35,4 +35,5 @@ def connect(self):
         self.azparallel.clicked.connect(self.arviz_parallel)
         self.azposterior.clicked.connect(self.arviz_plot_posterior)
         self.save.clicked.connect(self.save_data)
+        self.artgauss.clicked.connect(self.artificial_gauss)
         return

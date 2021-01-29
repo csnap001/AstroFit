@@ -1003,7 +1003,66 @@ class App(QtGui.QMainWindow):
             self.flux[dat_choice].setPen(color)
         if not(len(self.err) == 0) and isErr:
             self.err[dat_choice].setPen(color)
-    
+
+    def artificial_gauss(self):
+        '''
+        Module for adding gaussians to existing data.
+        intended for sensitivity measurements
+        ''' 
+        choice, ok = qt.QInputDialog.getItem(self,"Which to measure?","Choose data set:",self.names1d,0,False)
+        if not(ok):
+            qt.QMessageBox.about(self,"Not Adding","Chose no data, not adding.")
+            return
+        dat_choice = self.names1d.index(choice)
+        data = self.plt[dat_choice].listDataItems()
+
+        check = [self.regPlot[i].getViewBox().viewRange()[0][0] for i in np.arange(len(self.regPlot))]
+        reg, ok = qt.QInputDialog.getItem(self,"Choose a region","Which plot?:",np.array(check,str),0,False)#TODO: allow for multiple regions? or only abs masking?
+        if not(ok):
+            qt.QMessageBox.about(self,"Not Adding","Do not currently support no region choice")
+            return
+
+        mask_choice = check.index(float(reg))
+        lr = self.lrs[mask_choice].getRegion()
+        mask = (data[0].getData()[0] > lr[0]) & (data[0].getData()[0] < lr[1])
+        origFlux = data[0].getData()[1]
+        origWl = data[0].getData()[0]
+        flux = data[0].getData()[1][mask]
+        wl = data[0].getData()[0][mask]
+        err = data[1].getData()[1][mask]
+
+        sig, ok = qt.QInputDialog.getDouble(self,"Gaussian Width", "What is the width of the gaussians?:",0.0,0,50.0,5)
+        if not(ok):
+            qt.QMessageBox.about(self,"Not Adding","Do not currently support no sigma choice")
+
+        
+        done = "False"
+        run = 0
+        EW = []
+        success = []
+        FWHM = 2*np.sqrt(2*np.log(2))*sig
+        while not(done == "True"):
+            y = origFlux[mask]
+            data[0].setData(origWl,origFlux,pen='b')
+            pause, ok = qt.QInputDialog.getInt(self,'pausing','Data Reset',0,0,0,0)
+            run += 1
+            x_0 = np.random.uniform(lr[0],lr[1])
+            ew = np.random.uniform(1,20)
+            EW.append(ew)
+            mask_x = (wl > x_0 - FWHM/2) & (wl < x_0 + FWHM/2)
+            F_cont = np.mean(y[mask_x])
+            A = ew*F_cont/(np.sqrt(2*np.pi)*sig)
+            gauss = fxn.gauss0(wl,A,x_0,np.sqrt(2)*sig)
+            y += gauss
+            data[0].setData(wl,y)
+            win,ok = qt.QInputDialog.getInt(self,"EW: {}".format(ew),"did you find it?(1=yes,0=no): ",0,0,1,1)
+            success.append(win)
+            done,ok = qt.QInputDialog.getItem(self,"Total runs: {}".format(run),"Done?:",["True","False"],0,False)
+        data[0].setData(origWl,origFlux,pen='b')
+        bool_list = list(map(bool,success))
+        EW = np.array(EW)
+        qt.QMessageBox.about(self,"Finished","You identified {0} out of {1} gaussians with mininum found {2}".format(np.sum(success),len(success),np.min(EW[bool_list])))
+        #EW = sqrt(2pi)*A*sigma/Cont(x_0)
     '''
     NOTE: This begins the 2D image utilities
     currently these are broken and require setup
