@@ -78,7 +78,6 @@ def conf_high(data,half=0.34):
         conf = kde.integrate_box_1d(mean,mean+i*0.01*sd)
     return mean + i*0.01*sd
 
-
 class App(QtGui.QMainWindow):
 
     def __init__(self):
@@ -104,14 +103,8 @@ class App(QtGui.QMainWindow):
         self.is1dPos = False
         self.is2dPos = False
 
-        self.flux = None
-        self.err = None
-        self.isMask = False
-        self.Mask = []
-
-
-        self.ximg = []
-        self.yimg = []
+        self.flux = []
+        self.err = []
         self.initUI()
 
         #must have data atributes that can be grabbed by the user upon request
@@ -232,6 +225,8 @@ class App(QtGui.QMainWindow):
             self.Gwin1d.removeItem(self.plt[loc])
             self.plt.pop(loc)
             self.names1d.pop(loc)
+            self.flux.pop(loc)
+            self.err.pop(loc)
         else:
             qt.QMessageBox.about(self,"Done","Not Removing any plots")
 
@@ -274,7 +269,6 @@ class App(QtGui.QMainWindow):
         isErr = True
         self.plotColoring(isErr=isErr)
 
-
     def fileTab(self):
         self.isTab = True
         self.openFileNameDialog(isTab = self.isTab)
@@ -301,7 +295,6 @@ class App(QtGui.QMainWindow):
             qt.QMessageBox.about(self,"Opening File","ERROR: (Program Name) only supports .fits files")
             #TODO: Need to come up with name for GUI application
 
-
     def openFileNamesDialog(self):
         options = qt.QFileDialog.Options()
         options |= qt.QFileDialog.DontUseNativeDialog
@@ -327,7 +320,6 @@ class App(QtGui.QMainWindow):
         if not(txt == -1):
             pass
 
-
     #NOTE: Each fits file extension (i.e. hdul[1]) as an NAXIS memeber that states the 
     # number of data axes. So in bill's data the header has NAXIS = 1 and then in the 
     # image files we have NAXIS = 2. We can use this to implement restrictions
@@ -336,8 +328,8 @@ class App(QtGui.QMainWindow):
         self.plt[count].clear()
         pen = pg.mkPen(color='b')
         self.plt[count].addLegend()
-        self.flux = self.plt[count].plot(wl,flux,pen=pen,name='Flux')
-        self.err = self.plt[count].plot(wl,err,name='Error')
+        self.flux.append(self.plt[count].plot(wl,flux,pen=pen,name='Flux'))
+        self.err.append(self.plt[count].plot(wl,err,name='Error'))
     
     def headerDisplay(self,hdul):
         hdus = []
@@ -851,8 +843,7 @@ class App(QtGui.QMainWindow):
             pickle.dump(dat_to_save,output,pickle.HIGHEST_PROTOCOL)
         os.chdir(cwd)
         #TODO: only saves to specGUI. need to figure out how to choose save location
-        
-        
+                
     def arviz_density(self):
         """
         show density plot
@@ -934,7 +925,6 @@ class App(QtGui.QMainWindow):
         az.plot_posterior(self.arviz[choice])
         plt.show()
 
-
     def Flux_to_Lum(self):
 
         choice, ok = qt.QInputDialog.getItem(self,"Which plot","Choose data set:",self.names1d,0,False)
@@ -1003,13 +993,16 @@ class App(QtGui.QMainWindow):
             plt.show()
                 
     def plotColoring(self,isFlux = False, isErr=False):
+        choice, ok = qt.QInputDialog.getItem(self,"Which to color?","Choose data set:",self.names1d,0,False)
+        if not(ok):
+            qt.QMessageBox.about(self,"Not Coloring","Chose no data, not Coloring.")
+            return
+        dat_choice = self.names1d.index(choice)
         color = qt.QColorDialog.getColor()
-        if not(self.flux == None) and isFlux:
-            self.flux.setPen(color)
-        if not(self.err==None) and isErr:
-            self.err.setPen(color)
-            #TODO: after using Math unable to change color. 
-            # likely self.err no longer referenced
+        if not(len(self.flux) == 0) and isFlux:
+            self.flux[dat_choice].setPen(color)
+        if not(len(self.err) == 0) and isErr:
+            self.err[dat_choice].setPen(color)
     
     '''
     NOTE: This begins the 2D image utilities
