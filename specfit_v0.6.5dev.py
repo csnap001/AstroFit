@@ -18,6 +18,9 @@ TODO: Add operations to data elements (mostly to account for inverse variance st
 TODO: Add in Stellar population synthesis model plotting from Hoki (which is a wrapper to BPASS)
 This likely needs more work with data containers to help out with the workflow of the code
 
+TODO: make plots histograms? only need to set stepMode="center" in plot call, but requires
+len(x) = len(y) + 1. might be able to acomplish this using numpy hist
+
 Module for GUI spectroscopic fitting environment based on pymc3
 and astropy. (Possibly, desired) This module will also have basic image arithmatic capabilities.
 
@@ -1028,47 +1031,74 @@ class App(QtGui.QMainWindow):
         origFlux = data[0].getData()[1]
         origWl = data[0].getData()[0]
         flux = data[0].getData()[1][mask]
-        wl = data[0].getData()[0][mask]
+        wl = np.array(data[0].getData()[0][mask])
         err = data[1].getData()[1][mask]
 
         sig, ok = qt.QInputDialog.getDouble(self,"Gaussian Width", "What is the width of the gaussians?:",0.0,0,50.0,5)
         if not(ok):
             qt.QMessageBox.about(self,"Not Adding","Do not currently support no sigma choice")
-
+        FWHM = 2*np.sqrt(2*np.log(2))*sig
+        #pix_count = FWHM/2.18 #from QA of pypeit, only for Chris
+        #sig_data = np.sqrt(pix_count)*err
+        sig_data = []
+        sig_mean = []
+        diffwl = np.diff(wl)
+        diffwl = np.append(diffwl, 2.18)#from QA of pypeit, only for Chris
+        for w in wl:
+            masker = (wl > w -FWHM/2) & (wl < w + FWHM/2)
+            sig_data.append(np.sqrt(np.sum(err[masker]**2*diffwl[masker]**2)))
+            sig_mean.append(np.mean(flux[masker]))
+        sig_data = np.array(sig_data)
+        sig_mean = np.array(sig_mean)
         
+        #pen1sig = pg.mkPen((139,0,0),style=QtCore.Qt.DashLine)#darkred
+        #pen2sig = pg.mkPen((128,128,0),style=QtCore.Qt.DashLine)#olive
+        #pen3sig = pg.mkPen((0,100,0),style=QtCore.Qt.DashLine)#darkgreen
+
         done = "False"
         run = 0
-        EW = []
+        Flux = []
         success = []
-        FWHM = 2*np.sqrt(2*np.log(2))*sig
         while not(done == "True"):
             y = origFlux[mask]
             data[0].setData(origWl,origFlux,pen='b')
+            #if run == 0: 
+            #    self.plt[dat_choice].plot(wl,sig_data+sig_mean,pen=pen1sig,name='1 sigma')
+            #    self.plt[dat_choice].plot(wl,2*sig_data+sig_mean,pen=pen2sig,name='2 sigma')
+            #    self.plt[dat_choice].plot(wl,3*sig_data+sig_mean,pen=pen3sig,name='3 sigma')
+            #    self.plt[dat_choice].addLegend()
             pause, ok = qt.QInputDialog.getInt(self,'pausing','Data Reset',0,0,0,0)
             run += 1
-            x_0 = np.random.uniform(lr[0],lr[1])
-            ew = np.random.uniform(1,20)
-            EW.append(ew)
-            mask_x = (wl > x_0 - FWHM/2) & (wl < x_0 + FWHM/2)
-            F_cont = np.mean(y[mask_x])
-            A = ew*F_cont/(np.sqrt(2*np.pi)*sig)
+            #x_0 = np.random.uniform(lr[0],lr[1])
+            #i = (np.abs(wl-x_0)).argmin()#rough location for c
+            i = np.random.choice(wl.shape[0],1)
+            x_0 = wl[i]
+            fl = np.random.uniform(0.1,2.0)
+            Flux.append(fl)
+            A = fl/(np.sqrt(2*np.pi)*sig)
             gauss = fxn.gauss0(wl,A,x_0,np.sqrt(2)*sig)
             y += gauss
             data[0].setData(wl,y)
-            win,ok = qt.QInputDialog.getInt(self,"EW: {}".format(ew),"did you find it?(1=yes,0=no): ",0,0,1,1)
+            win,ok = qt.QInputDialog.getInt(self,"Flux: {0}, 1-sig: {1}, 2-sig: {2}, 3-sig: {3}, 5-sig: {4}".format(fl,sig_data[i],2*sig_data[i],3*sig_data[i],5*sig_data[i]),"did you find it?(1=yes,0=no): ",0,0,1,1)
             success.append(win)
             done,ok = qt.QInputDialog.getItem(self,"Total runs: {}".format(run),"Done?:",["True","False"],0,False)
         data[0].setData(origWl,origFlux,pen='b')
         bool_list = list(map(bool,success))
-        EW = np.array(EW)
-        qt.QMessageBox.about(self,"Finished","You identified {0} out of {1} gaussians with mininum found {2}".format(np.sum(success),len(success),np.min(EW[bool_list])))
+        Flux = np.array(Flux)
+        qt.QMessageBox.about(self,"Finished","You identified {0} out of {1} gaussians with mininum found {2}".format(np.sum(success),len(success),np.min(Flux[bool_list])))
         #EW = sqrt(2pi)*A*sigma/Cont(x_0)
+    
+    def sig_plot(self):
+        pass
     '''
     NOTE: This begins the 2D image utilities
     currently these are broken and require setup
     Not particularly concerned with this currently
     '''
     #TODO: likely "easy" to setup w/ photutils
+    #amazing examples of analysis tools with pyqtgraph
+    #launch with python -m pyqtgraph.examples
+    #image analysis example gives a great tool
     def combine_img_ext(self):
         """
         This will take the images, remove the overscan section, and then combine to 
