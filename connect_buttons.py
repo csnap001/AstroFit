@@ -36,4 +36,5 @@ def connect(self):
         self.azposterior.clicked.connect(self.arviz_plot_posterior)
         self.save.clicked.connect(self.save_data)
         self.artgauss.clicked.connect(self.artificial_gauss)
+        self.guessZ.clicked.connect(self.Show_lines)
         return

@@ -36,4 +36,5 @@ def buttons(self):
         self.azposterior = qt.QPushButton("Show Posterior",self)
         self.save = qt.QPushButton("Save Data",self)
         self.artgauss = qt.QPushButton("Sens EW",self)
+        self.guessZ = qt.QPushButton("Guess z",self)
         return

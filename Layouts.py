@@ -34,3 +34,4 @@ def Lay(self):
         self.dtool.addWidget(self.azparallel,row=2,col=6)
         self.dtool.addWidget(self.azposterior,row=2,col=7)
         self.dtool.addWidget(self.artgauss,row=2,col=8)
+        self.dtool.addWidget(self.guessZ,row=1,col=7)

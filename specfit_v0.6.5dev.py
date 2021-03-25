@@ -3,7 +3,8 @@ Created Thursday 8th, 2019 by Christopher Snapp-Kolas
 
 TODO: Rename the file so that it better describes its use.
 TODO: add "clear screen" option for clearing displays
-TODO: Add threading of functions to allow continued functionality of other QtGui objects
+TODO: Add threading of functions to allow continued functionality of other QtGui objects. Although there
+should be checks to ensure the user isn't overworking their computer.
 TODO: Add progress bar for fits: self.progress = QtGui.ProgressBar(self) -> self.progress.setValue(**some increasing number**)
 This is a difficult task, as pymc3 holds all this info internally and doesn't appear to allow for access
 TODO: 2 primary functions need to be built. 1: need non-parameterized equivalent width determination
@@ -20,6 +21,14 @@ This likely needs more work with data containers to help out with the workflow o
 
 TODO: make plots histograms? only need to set stepMode="center" in plot call, but requires
 len(x) = len(y) + 1. might be able to acomplish this using numpy hist
+
+TODO: create capability of multiplot over single axes.
+
+TODO: create file select that saves selected data products to PDF
+
+TODO: create capability to guess redshift and plot known emission/absorption lines
+perhaps create using pg.infitelines(...movable=True), then force them to all be
+at the proper redshift
 
 Module for GUI spectroscopic fitting environment based on pymc3
 and astropy. (Possibly, desired) This module will also have basic image arithmatic capabilities.
@@ -405,8 +414,8 @@ class App(QtGui.QMainWindow):
                 data_names[name] = np.sqrt(data_names[name])
 
             self.plt[dat_choice].clear()
-            self.flux = self.plt[dat_choice].plot(data_names['wl'],data_names['flux'],pen='b')
-            self.err = self.plt[dat_choice].plot(data_names['wl'],data_names['err'])
+            self.flux[dat_choice] = self.plt[dat_choice].plot(data_names['wl'],data_names['flux'],pen='b')
+            self.err[dat_choice] = self.plt[dat_choice].plot(data_names['wl'],data_names['err'])
 
             Happy, ok = qt.QInputDialog.getItem(self,"Good","Finished?:",["True","False"],0,False)
             if Happy == "True":
@@ -765,7 +774,7 @@ class App(QtGui.QMainWindow):
                 amp = pm.Normal("amp",mu=(bounds[0][0]+bounds[0][1])/2,sigma=0.8*(bounds[0][1] - bounds[0][0]),testval=bounds[0][1]/2)
                 centroid = pm.Normal("centroid",mu=(bounds[1][0]+bounds[1][1])/2,sigma=0.8*(bounds[1][1] - bounds[1][0]))
                 sigma = pm.TruncatedNormal("sigma",mu=(bounds[2][0]+bounds[2][1])/2,sigma=0.4*(bounds[2][1] - bounds[2][0]),testval=(bounds[2][0]+bounds[2][1])/2,lower=0)
-                cont_amp = pm.TruncatedNormal("cont_amp",mu=(bounds[3][0]+bounds[3][1])/2,sigma=0.8*(bounds[3][1] - bounds[3][0]),testval=(bounds[3][0]+bounds[3][1])/2,lower=0.0000001)
+                cont_amp = pm.TruncatedNormal("cont_amp",mu=(bounds[3][0]+bounds[3][1])/2,sigma=0.8*(bounds[3][1] - bounds[3][0]),testval=(bounds[3][0]+bounds[3][1])/2,lower=0.000001)
                 alpha = pm.TruncatedNormal("alpha",mu=(bounds[4][0]+bounds[4][1])/2,sigma=0.8*(bounds[4][1] - bounds[4][0]),testval=(bounds[4][0]+bounds[4][1])/2,lower=-5,upper=5)
                 unity = pm.TruncatedNormal("unity",mu=(bounds[5][0]+bounds[5][1])/2,sigma=0.2*(bounds[5][1] - bounds[5][0]),testval=(bounds[5][0]+bounds[5][1])/2,lower=leftun,upper=rghtun)
 
@@ -775,6 +784,7 @@ class App(QtGui.QMainWindow):
                 step = pm.HamiltonianMC()
 
                 mu = func(wl.astype(np.float32),amp,centroid,sigma,cont_amp,alpha,unity)
+            '''    
             print(basic_model.test_point)
             print(basic_model.check_test_point())
             q0 = step._logp_dlogp_func.dict_to_array(basic_model.test_point)
@@ -784,6 +794,7 @@ class App(QtGui.QMainWindow):
             logp,dlogp = step.integrator._logp_dlogp_func(q0)
             print(logp)
             print(dlogp)
+            '''
             #embed()
             #Likelihood of sampling distribution
             Y_obs = pm.Normal("Y_obs",mu=mu,sigma=err.astype(np.float32),observed=flux.astype(np.float32))
@@ -1002,9 +1013,9 @@ class App(QtGui.QMainWindow):
             return
         dat_choice = self.names1d.index(choice)
         color = qt.QColorDialog.getColor()
-        if not(len(self.flux) == 0) and isFlux:
+        if not(self.flux==None) and isFlux:
             self.flux[dat_choice].setPen(color)
-        if not(len(self.err) == 0) and isErr:
+        if not(self.err==None) and isErr:
             self.err[dat_choice].setPen(color)
 
     def artificial_gauss(self):
@@ -1088,8 +1099,48 @@ class App(QtGui.QMainWindow):
         qt.QMessageBox.about(self,"Finished","You identified {0} out of {1} gaussians with mininum found {2}".format(np.sum(success),len(success),np.min(Flux[bool_list])))
         #EW = sqrt(2pi)*A*sigma/Cont(x_0)
     
-    def sig_plot(self):
-        pass
+    def Show_lines(self):
+        '''
+        Method for showing all emission/absorption lines
+        based on redshift given by user
+        '''
+        choice, ok = qt.QInputDialog.getItem(self,"Which to fit","Choose data set:",self.names1d,0,False)
+        if not(ok):
+            qt.QMessageBox.about(self,"Not Fitting","Chose no data, not fitting.")
+            return
+        z, ok = qt.QInputDialog.getDouble(self,"Get redshift","z:",2.0,0.0,10.0,10)
+        if not(ok):
+            qt.QMessageBox.about(self,"Not plotting","Chose no data, not plotting.")
+            return
+        dat_choice = self.names1d.index(choice)
+        Neblines = [1265,1309,1533,1661,1666,1909] #SiII*1265,1309,1533;OIII]1661,1666;CIII]1909
+        Lowion = [1260.4221,1302.1685,1304.3702,1334.5323,1526.70698,1608.45085,1670.7886] #SiII1260;OI1302;SiII1304;CII1334;SiII1526;FeII1608;AlII1670
+        Highion = [1393.76018,1402.77291,1548.2049,1550.77845] #SiIV1393,1402;CIV1548,1550   
+        Steidel04 = [1334.5323,1854.71829,1862.79113,2344.2129601,2374.4603294,2382.7641781,2586.6495659,2600.1724835,2796.3542699,2803.5314853]# CII1334;AlIII1854,1862;FeII2344,2374,2382;FeII2586,2600;MgII2796,2803
+        oHighion = (z+1)*np.array(Highion)
+        oLowion = (z+1)*np.array(Lowion)
+        oNeblines = (z+1)*np.array(Neblines)
+        oSteidel04 = (z+1)*np.array(Steidel04)
+        #TODO: add method for removing these lines, also want to lock the movability of these lines to each other
+        #Actually it would be interesting to lock all the nebular lines seperately from high/low and vice versa
+        for count,H in enumerate(oHighion):
+            Iline = pg.InfiniteLine(angle=90,movable=True,hoverPen='g',pen=(0,120,60),label=str(int(Highion[count])),markers='o',name='High ionization lines')
+            self.plt[dat_choice].addItem(Iline)
+            Iline.setPos(H)
+        for count,L in enumerate(oLowion):
+            Iline = pg.InfiniteLine(angle=90,movable=True,hoverPen='g',pen=(120,0,60),label=str(int(Lowion[count])),markers='o',name='Low-Ionization Absorption lines')
+            self.plt[dat_choice].addItem(Iline)
+            Iline.setPos(L)
+        for count,N in enumerate(oNeblines):
+            Iline = pg.InfiniteLine(angle=90,movable=True,hoverPen='g',pen=(120,60,0),label=str(int(Neblines[count])),markers='o',name='Nebular lines')
+            self.plt[dat_choice].addItem(Iline)
+            Iline.setPos(N)
+        for count,S in enumerate(oSteidel04):
+            Iline = pg.InfiniteLine(angle=90,movable=True,hoverPen='g',pen=(0,60,120),label=str(int(Steidel04[count])),markers='o',name='Steidel 2004')
+            self.plt[dat_choice].addItem(Iline)
+            Iline.setPos(S)
+        self.plt[dat_choice].addLegend()
+
     '''
     NOTE: This begins the 2D image utilities
     currently these are broken and require setup
