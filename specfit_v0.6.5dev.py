@@ -102,7 +102,9 @@ class App(QtGui.QMainWindow):
         self.height = 1000
 
         self.plt = []#list containing plot information for each added 1d plot
+        self.imv = []#list containing images
         self.names1d = []#list containing names1d of 1d plots to allow for removal
+        self.names2d = []#list containing names of 2d plots to allow for removal
         self.lrs = []#list of linear regions for data selection (i.e. for fitting continua or EWs)
         self.regPlot = []#list to hold region plots
         self.yrange = [0,1]
@@ -147,6 +149,7 @@ class App(QtGui.QMainWindow):
         self.dplot = Dock("plots",size=(500,300))
         self.dTable = Dock("Table",size=(500,300))
         self.regDock = Dock("Regions",size=(500,300))
+        self.plot2d = Dock("2d image",size=(300,300))
         self.regWin = pg.GraphicsWindow()
         self.area.addDock(self.dtool,'top')
         self.area.addDock(self.dplot,'bottom',self.dtool)
@@ -162,7 +165,7 @@ class App(QtGui.QMainWindow):
         self.Gwin1d.setBackground('w')
         #Creating buttons
         cb.buttons(self)
-
+        
         #Connecting functions to buttons, that is setting up the action a button does
         conb.connect(self)
 
@@ -241,6 +244,11 @@ class App(QtGui.QMainWindow):
             self.err.pop(loc)
         else:
             qt.QMessageBox.about(self,"Done","Not Removing any plots")
+    def remove2D(self):
+        choice,ok = qt.QInputDialog.getItem(self,"Removing 2d?","Which plot?:",self.names2d,0,False)
+        if ok:
+            loc = self.names2d.index(choice)
+            self.dplot.remove
 
     def removeRegPlot(self):
         check = [self.regPlot[i].getViewBox().viewRange()[0][0] for i in np.arange(len(self.regPlot))]
@@ -851,12 +859,17 @@ class App(QtGui.QMainWindow):
         dir_ = QtGui.QFileDialog.getExistingDirectory(self, 'Select a folder:', 'C:\\', QtGui.QFileDialog.ShowDirsOnly)
         if len(dir_) == 0:
             return
+        vals = az.summary(self.arviz[choice],round_to=5,stat_funcs=[conf_low,conf_high])
         cwd = os.getcwd()
         os.chdir(dir_)
-        with open(name,'wb') as output:
+        with open(name+'.pkl','wb') as output:
             pickle.dump(dat_to_save,output,pickle.HIGHEST_PROTOCOL)
+        with open(name+'.txt','a') as output:
+            for i in range(len(vals['mean'])):
+                output.write("{0}   {1}   {2}\n".format(vals['mean'][i],vals['conf_low'][i]-vals['mean'][i],vals['conf_high'][i]-vals['mean'][i]))
         os.chdir(cwd)
-        #TODO: only saves to specGUI. need to figure out how to choose save location
+        #TODO: Let's create an additional file that saves the mean, lower, and upper quantiles such that
+        # the fit can be reproduced while also keeping the full distributions
                 
     def arviz_density(self):
         """
@@ -905,7 +918,6 @@ class App(QtGui.QMainWindow):
         choice, ok = qt.QInputDialog.getItem(self,"Which run?","choose a data set:",self.arviz.keys(),0,False)
         if not(ok):
             return
-        embed()
         vals = az.summary(self.arviz[choice],round_to=5,stat_funcs=[conf_low,conf_high])#var_names?
         axes = az.plot_pair(self.arviz[choice],kind=['hexbin',"kde"],kde_kwargs={"fill_last":False},marginals=True,point_estimate="mean",marginal_kwargs={"quantiles":[0.16,0.5,0.84]})
         for i in range(len(axes)):
@@ -1113,6 +1125,8 @@ class App(QtGui.QMainWindow):
             qt.QMessageBox.about(self,"Not plotting","Chose no data, not plotting.")
             return
         dat_choice = self.names1d.index(choice)
+        Lyman = 1216
+        oLy = (z+1)*np.array(1216)
         Neblines = [1265,1309,1533,1661,1666,1909] #SiII*1265,1309,1533;OIII]1661,1666;CIII]1909
         Lowion = [1260.4221,1302.1685,1304.3702,1334.5323,1526.70698,1608.45085,1670.7886] #SiII1260;OI1302;SiII1304;CII1334;SiII1526;FeII1608;AlII1670
         Highion = [1393.76018,1402.77291,1548.2049,1550.77845] #SiIV1393,1402;CIV1548,1550   
@@ -1123,6 +1137,9 @@ class App(QtGui.QMainWindow):
         oSteidel04 = (z+1)*np.array(Steidel04)
         #TODO: add method for removing these lines, also want to lock the movability of these lines to each other
         #Actually it would be interesting to lock all the nebular lines seperately from high/low and vice versa
+        Lyline = pg.InfiniteLine(angle=90,movable=True,hoverPen='g',pen=(0,120,0),label=str(int(Lyman)),markers='o',name='High ionization lines')
+        self.plt[dat_choice].addItem(Lyline)
+        Lyline.setPos(oLy)
         for count,H in enumerate(oHighion):
             Iline = pg.InfiniteLine(angle=90,movable=True,hoverPen='g',pen=(0,120,60),label=str(int(Highion[count])),markers='o',name='High ionization lines')
             self.plt[dat_choice].addItem(Iline)
@@ -1150,36 +1167,6 @@ class App(QtGui.QMainWindow):
     #amazing examples of analysis tools with pyqtgraph
     #launch with python -m pyqtgraph.examples
     #image analysis example gives a great tool
-    def combine_img_ext(self):
-        """
-        This will take the images, remove the overscan section, and then combine to 
-        have a single image which will then be displayed. prefereably it will show
-        the previous extensions on a seperate screen for comparison. This will require
-        the use of astropy and numpy for image mathematics (try to avoid explicit for loops
-        as these will eat up memory)
-        TODO: Look further into pyqtgraph examples. they are very powerful.
-        """
-        pass
-
-    def imgAdd(self):
-        pass
-    
-    def imgSub(self):
-        pass
-
-    def imgMult(self):
-        pass
-
-    def imgDiv(self):
-        pass
-
-    def get1d_from2d(self):
-        #likely will call plot_1d_fits. pg.affineSlice might be helpful here
-        pass
-
-    def get_wvlngth(self):
-        #for wavelength solution, use pixmap. likely need get1d_from2d
-        pass
 
     #TODO: this is currently broken, need method for adding frames to view one by one for multiple frame analysis
     # See pyqtgraph examples for help on this. Can easily accomplish this with current structure, but not interesting now
@@ -1187,44 +1174,32 @@ class App(QtGui.QMainWindow):
     #NOTE: for analysis of 2D spectra there exists a fitting algorithm with astropy (astropy.modeling.(fitting,models))
     # it seems to be good for analysis of flat frams
     def show_2d_fits(self,fileName = ""):
-        text = ""
-        self.view = self.img_view.addViewBox()
-        while not(text == "Y" or text == "N"):
-            text, _ = qt.QInputDialog.getText(self,"Get text","Multiframe? (Y,N)",qt.QLineEdit.Normal,"")
-            #TODO: How to add to graphicsLayoutWidget?
-            if text == 'Y':
-                if fileName:
-                    isFits = fileName.find('.fits')
-                    data = []
-                    if not(isFits == -1):
-                        f = fits.open(fileName)
-                        for i in range(len(f)-1):
-                            data.append(f[i+1].data)
-                            img = pg.ImageView(view=pg.PlotItem())
-                            print(img)
-                            img.setImage(data[i])
-                            imgt = pg.ImageItem()
-                            lay = qt.QVBoxLayout()
-                            lay.addWidget(img)
-                            imgt.setImage(data[i])
-                            img3 = pg.makeARGB(data[i])
-                            img4 = pg.makeQImage(data[i])
-                            self.img_view.addItem(qt.QPushButton('hello',self))
-                        f.close()
-            elif text == 'N':
-                #This is single frame so add single img
-                if fileName:
-                    isFits = fileName.find('.fits')
-                    self.img_view.clear()
-                    if not(isFits == -1):
-                        f = fits.open(fileName)
-                        img = f[1].data
-                        self.img_view.setImage(img)
-                        f.close()
-            else:
-                msg = qt.QMessageBox()
-                msg.setText('Please choose Y or N')
-                told = msg.exec_()
+        try: hdul = fits.open(fileName)
+        except: qt.QMessageBox.about(self,"Error","Something went wrong opening {0}".format(fileName))
+        '''
+        for i in range(len(hdul)-1):
+            try: data = hdul[i].data
+            except:
+                continue
+            else: 
+                if data is None: continue
+            #embed()
+            #TODO: add ability to choose what extension to add
+        '''
+        header = hdul[0].header
+        s = []
+        for i in header:
+            if i.find('EXT0') != -1:
+                s.append(i)
+        choice, ok = qt.QInputDialog.getItem(self,"Which extension?","choose a data set:",[header[i] for i in s],0,False)        
+        data = hdul[choice].data
+        imv = pg.ImageView()
+            #embed()
+        self.area.addDock(self.plot2d,"right",self.dTable)
+        self.plot2d.addWidget(imv)
+        imv.setImage(data)
+            #cmap = pg.ColorMap('greys')
+            #self.imv[i-1].setColorMap(cmap)
     
             
 if __name__ == '__main__':
