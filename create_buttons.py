@@ -37,4 +37,5 @@ def buttons(self):
         self.save = qt.QPushButton("Save Data",self)
         self.artgauss = qt.QPushButton("Sens EW",self)
         self.guessZ = qt.QPushButton("Guess z",self)
+        self.dLines = qt.QPushButton('Remove Guess',self)
         return

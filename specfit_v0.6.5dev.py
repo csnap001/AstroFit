@@ -102,6 +102,7 @@ class App(QtGui.QMainWindow):
         self.height = 1000
 
         self.plt = []#list containing plot information for each added 1d plot
+        self.lines = []#list containing infinite lines to allow for removal
         self.imv = []#list containing images
         self.names1d = []#list containing names1d of 1d plots to allow for removal
         self.names2d = []#list containing names of 2d plots to allow for removal
@@ -1111,6 +1112,16 @@ class App(QtGui.QMainWindow):
         qt.QMessageBox.about(self,"Finished","You identified {0} out of {1} gaussians with mininum found {2}".format(np.sum(success),len(success),np.min(Flux[bool_list])))
         #EW = sqrt(2pi)*A*sigma/Cont(x_0)
     
+    def Remove_lines(self):
+        choice, ok = qt.QInputDialog.getItem(self,"Which to fit","Choose data set:",self.names1d,0,False)
+        if not(ok):
+            qt.QMessageBox.about(self,"Not Fitting","Chose no data, not fitting.")
+            return
+        dat_choice = self.names1d.index(choice)
+        for L in self.lines:
+            self.plt[dat_choice].removeItem(L)
+        self.lines = []
+        
     def Show_lines(self):
         '''
         Method for showing all emission/absorption lines
@@ -1137,24 +1148,29 @@ class App(QtGui.QMainWindow):
         oSteidel04 = (z+1)*np.array(Steidel04)
         #TODO: add method for removing these lines, also want to lock the movability of these lines to each other
         #Actually it would be interesting to lock all the nebular lines seperately from high/low and vice versa
-        Lyline = pg.InfiniteLine(angle=90,movable=True,hoverPen='g',pen=(0,120,0),label=str(int(Lyman)),markers='o',name='High ionization lines')
+        Lyline = pg.InfiniteLine(angle=90,movable=True,hoverPen='g',pen=(0,120,0),label=str(int(Lyman)),markers='o',name='High ionization lines',labelOpts={'rotateAxis':(1,0),'color':'k'})
+        self.lines.append(Lyline)
         self.plt[dat_choice].addItem(Lyline)
         Lyline.setPos(oLy)
         for count,H in enumerate(oHighion):
-            Iline = pg.InfiniteLine(angle=90,movable=True,hoverPen='g',pen=(0,120,60),label=str(int(Highion[count])),markers='o',name='High ionization lines')
+            Iline = pg.InfiniteLine(angle=90,movable=True,hoverPen='g',pen=(0,120,60),label=str(int(Highion[count])),markers='o',name='High ionization lines',labelOpts={'rotateAxis':(1,0),'color':'k'})
             self.plt[dat_choice].addItem(Iline)
+            self.lines.append(Iline)
             Iline.setPos(H)
         for count,L in enumerate(oLowion):
-            Iline = pg.InfiniteLine(angle=90,movable=True,hoverPen='g',pen=(120,0,60),label=str(int(Lowion[count])),markers='o',name='Low-Ionization Absorption lines')
+            Iline = pg.InfiniteLine(angle=90,movable=True,hoverPen='g',pen=(120,0,60),label=str(int(Lowion[count])),markers='o',name='Low-Ionization Absorption lines',labelOpts={'rotateAxis':(1,0),'color':'k'})
             self.plt[dat_choice].addItem(Iline)
+            self.lines.append(Iline)
             Iline.setPos(L)
         for count,N in enumerate(oNeblines):
-            Iline = pg.InfiniteLine(angle=90,movable=True,hoverPen='g',pen=(120,60,0),label=str(int(Neblines[count])),markers='o',name='Nebular lines')
+            Iline = pg.InfiniteLine(angle=90,movable=True,hoverPen='g',pen=(120,60,0),label=str(int(Neblines[count])),markers='o',name='Nebular lines',labelOpts={'rotateAxis':(1,0),'color':'k'})
             self.plt[dat_choice].addItem(Iline)
+            self.lines.append(Iline)
             Iline.setPos(N)
         for count,S in enumerate(oSteidel04):
-            Iline = pg.InfiniteLine(angle=90,movable=True,hoverPen='g',pen=(0,60,120),label=str(int(Steidel04[count])),markers='o',name='Steidel 2004')
+            Iline = pg.InfiniteLine(angle=90,movable=True,hoverPen='g',pen=(0,60,120),label=str(int(Steidel04[count])),markers='o',name='Steidel 2004',labelOpts={'rotateAxis':(1,0),'color':'k'})
             self.plt[dat_choice].addItem(Iline)
+            self.lines.append(Iline)
             Iline.setPos(S)
         self.plt[dat_choice].addLegend()
 
