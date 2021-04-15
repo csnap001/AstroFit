@@ -151,6 +151,10 @@ class App(QtGui.QMainWindow):
         self.dTable = Dock("Table",size=(500,300))
         self.regDock = Dock("Regions",size=(500,300))
         self.plot2d = Dock("2d image",size=(300,300))
+        self.imv = pg.ImageView()
+        self.plot2d.addWidget(self.imv)#Not sure how to remove widgets, so instead setting
+        # up structure where we open and close the dock and change the data on request
+        # TODO: widgets also have "close" function, or at least imageviews do
         self.regWin = pg.GraphicsWindow()
         self.area.addDock(self.dtool,'top')
         self.area.addDock(self.dplot,'bottom',self.dtool)
@@ -764,7 +768,7 @@ class App(QtGui.QMainWindow):
                     amp = pm.TruncatedNormal("amp",mu=(bounds[0][0]+bounds[0][1])/2,sigma=0.8*(bounds[0][1]-bounds[0][0]),testval=(bounds[0][0]+bounds[0][1])/2,lower=0.0000001)
                     alpha = pm.TruncatedNormal("alpha",mu=(bounds[1][0]+bounds[1][1])/2,sigma=0.8*(bounds[1][1]-bounds[1][0]),testval=(bounds[1][0]+bounds[1][1])/2,lower=-5,upper=5)
                     unity = pm.TruncatedNormal("unity",mu=(bounds[2][0]+bounds[2][1])/2,sigma=0.8*(bounds[2][1]-bounds[2][0]),testval=(bounds[2][0]+bounds[2][1])/2,lower=leftun,upper=rghtun)
-                    step = pm.HamiltonianMC()
+                    #step = pm.HamiltonianMC()
                     #Expected value
                     mu = func(wl.astype(np.float32),amp,alpha,unity)
                 if cname == "Linear":
@@ -790,7 +794,7 @@ class App(QtGui.QMainWindow):
                 #embed()
                 #TODO: consider using non-centered reparameterization, i.e. amp = mu + sigma*amp_0, where amp_0 ~ N(0,1)
                 #use 540 as example case
-                step = pm.HamiltonianMC()
+                #step = pm.HamiltonianMC()
 
                 mu = func(wl.astype(np.float32),amp,centroid,sigma,cont_amp,alpha,unity)
             '''    
@@ -817,7 +821,6 @@ class App(QtGui.QMainWindow):
                 vals = az.summary(trace,round_to=10,var_names=['amp','centroid','sigma','cont_amp','alpha','unity'])
             samples = pm.trace_to_dataframe(trace,varnames=vals['mean'].keys())
 
-        
         if name == 'continuum':
             self.contfit[0].append(vals['mean'])
             name = self.cname + self.names1d[plt_name]
@@ -923,6 +926,17 @@ class App(QtGui.QMainWindow):
         axes = az.plot_pair(self.arviz[choice],kind=['hexbin',"kde"],kde_kwargs={"fill_last":False},marginals=True,point_estimate="mean",marginal_kwargs={"quantiles":[0.16,0.5,0.84]})
         for i in range(len(axes)):
             axes[i][i].set_title(r'${0}={1}_{{{2}}}^{{{3}}}$'.format(vals['mean'].keys()[i],vals['mean'][i],vals['conf_low'][i]-vals['mean'][i],vals['conf_high'][i]-vals['mean'][i]))
+        if choice.find('EW') != -1:    
+            fig2 = plt.figure()
+            ax2 = plt.axes()
+            y,_,_ = ax2.hist(self.pdfs['EWPDF'][0],bins=100,density=True)
+            #embed()
+            up = conf_high(self.pdfs['EWPDF'][0])
+            down = conf_low(self.pdfs['EWPDF'][0])
+            m = np.mean(self.pdfs['EWPDF'][0])
+            ax2.vlines(m,0,np.max(y),color='k')
+            ax2.text(self.pdfs['EWPDF'][1][0] - 10,0.8*np.max(y),r'${0}^{{{1}}}_{{{2}}}$'.format(m,up-m,down-m))
+            ax2.set_xlabel('EW')
         plt.show()
 
     def arviz_parallel(self):
@@ -1189,6 +1203,14 @@ class App(QtGui.QMainWindow):
     # using docking
     #NOTE: for analysis of 2D spectra there exists a fitting algorithm with astropy (astropy.modeling.(fitting,models))
     # it seems to be good for analysis of flat frams
+    # can look at ccdproc for coadding
+    # image_view widget has a close function that may be preferabel to closing the whole dock
+    # image_view has a getROI function that returns the ROI plotWidget, this could be 
+    # saved or transferred to the 1dPlotting for further analysis (fitting, wl determination, etc.)
+
+    def remove2D(self):
+        self.plot2d.close()
+
     def show_2d_fits(self,fileName = ""):
         try: hdul = fits.open(fileName)
         except: qt.QMessageBox.about(self,"Error","Something went wrong opening {0}".format(fileName))
@@ -1209,11 +1231,9 @@ class App(QtGui.QMainWindow):
                 s.append(i)
         choice, ok = qt.QInputDialog.getItem(self,"Which extension?","choose a data set:",[header[i] for i in s],0,False)        
         data = hdul[choice].data
-        imv = pg.ImageView()
             #embed()
         self.area.addDock(self.plot2d,"right",self.dTable)
-        self.plot2d.addWidget(imv)
-        imv.setImage(data)
+        self.imv.setImage(data)
             #cmap = pg.ColorMap('greys')
             #self.imv[i-1].setColorMap(cmap)
     

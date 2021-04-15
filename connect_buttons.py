@@ -38,4 +38,5 @@ def connect(self):
         self.artgauss.clicked.connect(self.artificial_gauss)
         self.guessZ.clicked.connect(self.Show_lines)
         self.dLines.clicked.connect(self.Remove_lines)
+        self.r2D.clicked.connect(self.remove2D)
         return
