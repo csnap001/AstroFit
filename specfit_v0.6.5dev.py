@@ -626,9 +626,9 @@ class App(QtGui.QMainWindow):
                     OIIIMask = (c*(wl-wlOIII)/wlOIII > -400) & (c*(wl-wlOIII)/wlOIII < 400)
                     CIIIMask = (c*(wl-wlCIII)/wlCIII > -400) & (c*(wl-wlCIII)/wlCIII < 400)
                     OIVMask = (c*(wl-wlOIV)/wlOIV > -400) & (c*(wl-wlOIV)/wlOIV < 400)
-                    add1 = (wl > 4720) & (wl < 4750)
-                    add2 = (wl > 4908) & (wl < 4933)
-                    TotMask = CIVMask | HeIIMask | OIIIMask | CIIIMask | OIVMask | add1 | add2
+                    #add1 = (wl > 4720) & (wl < 4750)
+                    #add2 = (wl > 4908) & (wl < 4933)
+                    TotMask = CIVMask | HeIIMask | OIIIMask | CIIIMask | OIVMask #| add1 | add2
                     x = wl[TotMask]
                     y = flux[TotMask]
                     CIVscatter = pg.ScatterPlotItem(x=x,y=y,pen=pg.mkPen('g'),brush=pg.mkBrush('g'))
