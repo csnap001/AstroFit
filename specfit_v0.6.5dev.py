@@ -28,7 +28,10 @@ TODO: create file select that saves selected data products to PDF
 
 TODO: create capability to guess redshift and plot known emission/absorption lines
 perhaps create using pg.infitelines(...movable=True), then force them to all be
-at the proper redshift
+at the same redshift (would be nice to link positions, needs helper update function to be done)
+
+TODO: Plot parameter space (image_view?) and allow user to move through space and choose points
+then plot using those parameters over original data set. This is good for visualization.
 
 Module for GUI spectroscopic fitting environment based on pymc3
 and astropy. (Possibly, desired) This module will also have basic image arithmatic capabilities.
@@ -783,8 +786,8 @@ class App(QtGui.QMainWindow):
                     mu = func(wl.astype(np.float32),*a)
             if name == "EW":
                 #Priors
-                
-                amp = pm.Normal("amp",mu=(bounds[0][0]+bounds[0][1])/2,sigma=0.8*(bounds[0][1] - bounds[0][0]),testval=bounds[0][1]/2)
+                #embed()
+                amp = pm.TruncatedNormal("amp",mu=(bounds[0][0]+bounds[0][1])/2,sigma=0.8*(bounds[0][1] - bounds[0][0]),testval=bounds[0][1]/2,lower=0)
                 centroid = pm.Normal("centroid",mu=(bounds[1][0]+bounds[1][1])/2,sigma=0.8*(bounds[1][1] - bounds[1][0]))
                 sigma = pm.TruncatedNormal("sigma",mu=(bounds[2][0]+bounds[2][1])/2,sigma=0.4*(bounds[2][1] - bounds[2][0]),testval=(bounds[2][0]+bounds[2][1])/2,lower=0)
                 cont_amp = pm.TruncatedNormal("cont_amp",mu=(bounds[3][0]+bounds[3][1])/2,sigma=0.8*(bounds[3][1] - bounds[3][0]),testval=(bounds[3][0]+bounds[3][1])/2,lower=0.000001)
@@ -813,7 +816,7 @@ class App(QtGui.QMainWindow):
             Y_obs = pm.Normal("Y_obs",mu=mu,sigma=err.astype(np.float32),observed=flux.astype(np.float32))
             
             #trace = pm.sample(20000,tune=5000,cores=6,init='adapt_diag',step=pm.step_methods.Metropolis())#used for testing parameter space
-            trace = pm.sample(10000,tune=5000,target_accept=0.80,cores=10)
+            trace = pm.sample(10000,tune=5000,target_accept=0.8,cores=10)
             #NOTE: vals['mean'].keys() gives the parameter names
             if cname == "Power Law":
                 vals = az.summary(trace,round_to=10,var_names=['amp','alpha','unity'])
@@ -853,25 +856,28 @@ class App(QtGui.QMainWindow):
         '''
         routine to save parameter fits to .fits file
         '''
-        choice, ok = qt.QInputDialog.getItem(self,"Which run?","choose a data set:",self.arviz.keys(),0,False)
-        if not(ok):
-            return
-        dat_to_save = self.arviz[choice]
-        name, ok = qt.QInputDialog.getText(self,"Filename","Name the fits file:")
-        if not(ok):
-            return
-        dir_ = QtGui.QFileDialog.getExistingDirectory(self, 'Select a folder:', 'C:\\', QtGui.QFileDialog.ShowDirsOnly)
-        if len(dir_) == 0:
-            return
-        vals = az.summary(self.arviz[choice],round_to=5,stat_funcs=[conf_low,conf_high])
-        cwd = os.getcwd()
-        os.chdir(dir_)
-        with open(name+'.pkl','wb') as output:
-            pickle.dump(dat_to_save,output,pickle.HIGHEST_PROTOCOL)
-        with open(name+'.txt','a') as output:
-            for i in range(len(vals['mean'])):
-                output.write("{0}   {1}   {2}\n".format(vals['mean'][i],vals['conf_low'][i]-vals['mean'][i],vals['conf_high'][i]-vals['mean'][i]))
-        os.chdir(cwd)
+        basic_model = pm.Model()
+        with basic_model:
+            choice, ok = qt.QInputDialog.getItem(self,"Which run?","choose a data set:",self.arviz.keys(),0,False)
+            if not(ok):
+                return
+            dat_to_save = self.arviz[choice]
+            name, ok = qt.QInputDialog.getText(self,"Filename","Name the fits file:")
+            if not(ok):
+                return
+            dir_ = QtGui.QFileDialog.getExistingDirectory(self, 'Select a folder:', 'C:\\', QtGui.QFileDialog.ShowDirsOnly)
+            if len(dir_) == 0:
+                return
+            vals = az.summary(self.arviz[choice],round_to=5,stat_funcs=[conf_low,conf_high])
+            cwd = os.getcwd()
+            os.chdir(dir_)
+            with open(name+'.pkl','wb') as output:
+                pickle.dump(dat_to_save,output,pickle.HIGHEST_PROTOCOL)
+            with open(name+'.txt','a') as output:
+                for i in range(len(vals['mean'])):
+                    output.write("{0}   {1}   {2}\n".format(vals['mean'][i],vals['conf_low'][i]-vals['mean'][i],vals['conf_high'][i]-vals['mean'][i]))
+            os.chdir(cwd)
+        del(basic_model)
         #TODO: Let's create an additional file that saves the mean, lower, and upper quantiles such that
         # the fit can be reproduced while also keeping the full distributions
                 
@@ -879,11 +885,14 @@ class App(QtGui.QMainWindow):
         """
         show density plot
         """
-        choice, ok = qt.QInputDialog.getItem(self,"Which run?","choose a data set:",self.arviz.keys(),0,False)
-        if not(ok):
-            return
-        az.plot_density(self.arviz[choice])
-        plt.show()
+        basic_model = pm.Model()
+        with basic_model:
+            choice, ok = qt.QInputDialog.getItem(self,"Which run?","choose a data set:",self.arviz.keys(),0,False)
+            if not(ok):
+                return
+            az.plot_density(self.arviz[choice])
+            plt.show()
+        del(basic_model)
 
     def arviz_autocorrelation(self):
         '''
@@ -919,25 +928,28 @@ class App(QtGui.QMainWindow):
         '''
         essentially a corner plot with marginals=True
         '''
-        choice, ok = qt.QInputDialog.getItem(self,"Which run?","choose a data set:",self.arviz.keys(),0,False)
-        if not(ok):
-            return
-        vals = az.summary(self.arviz[choice],round_to=5,stat_funcs=[conf_low,conf_high])#var_names?
-        axes = az.plot_pair(self.arviz[choice],kind=['hexbin',"kde"],kde_kwargs={"fill_last":False},marginals=True,point_estimate="mean",marginal_kwargs={"quantiles":[0.16,0.5,0.84]})
-        for i in range(len(axes)):
-            axes[i][i].set_title(r'${0}={1}_{{{2}}}^{{{3}}}$'.format(vals['mean'].keys()[i],vals['mean'][i],vals['conf_low'][i]-vals['mean'][i],vals['conf_high'][i]-vals['mean'][i]))
-        if choice.find('EW') != -1:    
-            fig2 = plt.figure()
-            ax2 = plt.axes()
-            y,_,_ = ax2.hist(self.pdfs['EWPDF'][0],bins=100,density=True)
-            #embed()
-            up = conf_high(self.pdfs['EWPDF'][0])
-            down = conf_low(self.pdfs['EWPDF'][0])
-            m = np.mean(self.pdfs['EWPDF'][0])
-            ax2.vlines(m,0,np.max(y),color='k')
-            ax2.text(self.pdfs['EWPDF'][1][0] - 10,0.8*np.max(y),r'${0}^{{{1}}}_{{{2}}}$'.format(m,up-m,down-m))
-            ax2.set_xlabel('EW')
-        plt.show()
+        basic_model = pm.Model()
+        with basic_model:
+            choice, ok = qt.QInputDialog.getItem(self,"Which run?","choose a data set:",self.arviz.keys(),0,False)
+            if not(ok):
+                return
+            vals = az.summary(self.arviz[choice],round_to=5,stat_funcs=[conf_low,conf_high])#var_names?
+            axes = az.plot_pair(self.arviz[choice],kind=['hexbin',"kde"],kde_kwargs={"fill_last":False},marginals=True,point_estimate="mean",marginal_kwargs={"quantiles":[0.16,0.5,0.84]})
+            for i in range(len(axes)):
+                axes[i][i].set_title(r'${0}={1}_{{{2}}}^{{{3}}}$'.format(vals['mean'].keys()[i],vals['mean'][i],vals['conf_low'][i]-vals['mean'][i],vals['conf_high'][i]-vals['mean'][i]))
+            if choice.find('EW') != -1:    
+                fig2 = plt.figure()
+                ax2 = plt.axes()
+                y,x,_ = ax2.hist(self.pdfs['EWPDF'][0],bins=100,density=True)
+                #embed()
+                up = conf_high(self.pdfs['EWPDF'][0])
+                down = conf_low(self.pdfs['EWPDF'][0])
+                m = np.mean(self.pdfs['EWPDF'][0])
+                ax2.vlines(m,0,np.max(y),color='k')
+                ax2.text(np.mean(x) - np.std(x),0.8*np.max(y),r'${0}^{{{1}}}_{{{2}}}$'.format(m,up-m,down-m))
+                ax2.set_xlabel('EW')
+            plt.show()
+        del(basic_model)
 
     def arviz_parallel(self):
         '''
@@ -1018,6 +1030,7 @@ class App(QtGui.QMainWindow):
 
         return converted_meas, conv_meas_errs
 
+    #deprecated
     def showPDFS(self):
         '''
         Helper function for displaying corner plot of fit parameters.
@@ -1032,7 +1045,8 @@ class App(QtGui.QMainWindow):
                         labels=labels,verbose=True,plot_contours=True,title_fmt=".3E",truths=self.pdfs[func][1],
                         levels=(0.68,)) #must be (values, # of parameters), (i.e. (365,4) corresponds to a fit with four parameters)
             plt.show()
-                
+    #End deprecated 
+
     def plotColoring(self,isFlux = False, isErr=False):
         choice, ok = qt.QInputDialog.getItem(self,"Which to color?","Choose data set:",self.names1d,0,False)
         if not(ok):
@@ -1207,6 +1221,10 @@ class App(QtGui.QMainWindow):
     # image_view widget has a close function that may be preferabel to closing the whole dock
     # image_view has a getROI function that returns the ROI plotWidget, this could be 
     # saved or transferred to the 1dPlotting for further analysis (fitting, wl determination, etc.)
+    #TODO: 2d coadding is a feature I want to add in the near future. for pypeit I want to 
+    # grab the bitmask and turn it into a list of 1's and zeros to use on any image. 
+    # then we can just multiply element by element with the desired matrix to get our image
+    # (this presumes that bits that are "on" are not desired and should be given a value of 0)
 
     def remove2D(self):
         self.plot2d.close()
@@ -1214,28 +1232,18 @@ class App(QtGui.QMainWindow):
     def show_2d_fits(self,fileName = ""):
         try: hdul = fits.open(fileName)
         except: qt.QMessageBox.about(self,"Error","Something went wrong opening {0}".format(fileName))
-        '''
-        for i in range(len(hdul)-1):
-            try: data = hdul[i].data
-            except:
-                continue
-            else: 
-                if data is None: continue
-            #embed()
-            #TODO: add ability to choose what extension to add
-        '''
+
         header = hdul[0].header
         s = []
+        #TODO: need to generalize this. EXT0 might apply to a few cases (certainly pypeit),
+        # but not all (i.e. student generated fits files)
         for i in header:
             if i.find('EXT0') != -1:
                 s.append(i)
         choice, ok = qt.QInputDialog.getItem(self,"Which extension?","choose a data set:",[header[i] for i in s],0,False)        
         data = hdul[choice].data
-            #embed()
         self.area.addDock(self.plot2d,"right",self.dTable)
         self.imv.setImage(data)
-            #cmap = pg.ColorMap('greys')
-            #self.imv[i-1].setColorMap(cmap)
     
             
 if __name__ == '__main__':
