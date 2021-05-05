@@ -39,4 +39,6 @@ def buttons(self):
         self.guessZ = qt.QPushButton("Guess z",self)
         self.dLines = qt.QPushButton('Remove Guess',self)
         self.r2D = qt.QPushButton("Close 2D", self)
+        self.sm = qt.QPushButton("Smooth",self)
+        self.pypeit = qt.QPushButton("Pypeit 2D",self)
         return

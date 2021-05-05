@@ -33,6 +33,10 @@ at the same redshift (would be nice to link positions, needs helper update funct
 TODO: Plot parameter space (image_view?) and allow user to move through space and choose points
 then plot using those parameters over original data set. This is good for visualization.
 
+TODO: add in slider for smoothing plots (need to hold original data set to be able to reset)
+Created Slider class to handle this. Connect Slider widget to update plot with gaussian smoothing
+function. example: Slide = Slider(lower_bound,Upper_bound), Slide.valueChanged.connect(smooth_plot)
+
 Module for GUI spectroscopic fitting environment based on pymc3
 and astropy. (Possibly, desired) This module will also have basic image arithmatic capabilities.
 
@@ -70,28 +74,71 @@ import scipy as sc
 from IPython import embed
 from astropy import cosmology
 import pickle
+from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QApplication, QHBoxLayout, QLabel, QSizePolicy, QSlider, QSpacerItem, \
+    QVBoxLayout, QWidget, QToolBar
+from scipy.ndimage import gaussian_filter1d
 
 def conf_low(data,half=0.34):
     mean = np.mean(data)
     sd = np.std(data)
+    #embed()
     kde = sc.stats.gaussian_kde(data,0.05)
     i = 0
     conf = 0
     while conf < half:
         i += 1
         conf = kde.integrate_box_1d(mean-i*0.01*sd,mean)
+        if i > 500:
+            print("timeout: distribution has problems")
+            break
+    print("finished low")
     return mean - i*0.01*sd
 
 def conf_high(data,half=0.34):
     mean = np.mean(data)
     sd = np.std(data)
+    #embed()
     kde = sc.stats.gaussian_kde(data,0.05)
     i = 0
     conf = 0
     while conf < half:
         i += 1
         conf = kde.integrate_box_1d(mean,mean+i*0.01*sd)
+        if i > 500:
+            print("timeout: distribution has problems")
+            break
+    print('finished high')
     return mean + i*0.01*sd
+
+
+class Slider(QWidget):
+    def __init__(self, minimum, maximum, parent=None):
+        super(Slider, self).__init__(parent=parent)
+        self.verticalLayout = QVBoxLayout(self)
+        self.label = QLabel(self)
+        self.verticalLayout.addWidget(self.label)
+        self.horizontalLayout = QHBoxLayout()
+        spacerItem = QSpacerItem(0, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        self.horizontalLayout.addItem(spacerItem)
+        self.slider = QSlider(self)
+        self.slider.setOrientation(Qt.Vertical)
+        self.horizontalLayout.addWidget(self.slider)
+        spacerItem1 = QSpacerItem(0, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        self.horizontalLayout.addItem(spacerItem1)
+        self.verticalLayout.addLayout(self.horizontalLayout)
+        self.resize(self.sizeHint())
+
+        self.minimum = minimum
+        self.maximum = maximum
+        self.slider.valueChanged.connect(self.setLabelValue)
+        self.x = None
+        self.setLabelValue(self.slider.value())
+
+    def setLabelValue(self, value):
+        self.x = self.minimum + (float(value) / (self.slider.maximum() - self.slider.minimum())) * (
+        self.maximum - self.minimum)
+        self.label.setText("{0:.4g}".format(self.x))
 
 class App(QtGui.QMainWindow):
 
@@ -114,6 +161,7 @@ class App(QtGui.QMainWindow):
         self.yrange = [0,1]
         self.prior = []#list of continuum priors that can be used
         self.fill = None
+        self.memory = [] #used to have access to unsmoothed data
 
         self.is1d = False
         self.is2d = False
@@ -142,6 +190,42 @@ class App(QtGui.QMainWindow):
         #NOTE: self.arviz will hold the data used in arviz visualizations. also for saving data
         self.arviz = {}
 
+        self.toolbar = QToolBar("Spec Tools")
+        self.addToolBar(self.toolbar)
+        cb.buttons(self)
+        conb.connect(self)
+        self.toolbar.addWidget(self.imgbut)
+        self.toolbar.addWidget(self.specbut)
+        self.toolbar.addWidget(self.rm1dPlot)
+        self.toolbar.addWidget(self.addReg)
+        self.toolbar.addWidget(self.remReg)
+        self.toolbar.addWidget(self.tbl)
+        self.toolbar.addWidget(self.ewBut)
+        self.toolbar.addWidget(self.nonPEW)
+        self.toolbar.addWidget(self.lincent)
+        self.toolbar.addWidget(self.addImgbut)
+        self.toolbar.addWidget(self.Dcolorbut)
+        self.toolbar.addWidget(self.EcolorBut)
+        self.toolbar.addWidget(self.contBut)
+        self.toolbar.addWidget(self.getFitsBut)
+        self.toolbar.addWidget(self.fluxToLum)
+        self.toolbar.addWidget(self.Math)
+        self.toolbar.addWidget(self.aztrace)
+        self.toolbar.addWidget(self.azdensity)
+        self.toolbar.addWidget(self.azautocorr)
+        self.toolbar.addWidget(self.azenergy)
+        self.toolbar.addWidget(self.azforest)
+        self.toolbar.addWidget(self.azjoint)
+        self.toolbar.addWidget(self.azparallel)
+        self.toolbar.addWidget(self.azposterior)
+        self.toolbar.addWidget(self.save)
+        self.toolbar.addWidget(self.artgauss)
+        self.toolbar.addWidget(self.guessZ)
+        self.toolbar.addWidget(self.dLines)
+        self.toolbar.addWidget(self.r2D)
+        self.toolbar.addWidget(self.sm)
+        self.toolbar.addWidget(self.pypeit)
+
 
     def initUI(self):
         
@@ -161,8 +245,8 @@ class App(QtGui.QMainWindow):
         self.regWin = pg.GraphicsWindow()
         self.area.addDock(self.dtool,'top')
         self.area.addDock(self.dplot,'bottom',self.dtool)
-        self.area.addDock(self.regDock,'below',self.dplot)
-        self.area.addDock(self.dTable,'right',self.dplot)
+        self.area.addDock(self.dTable,'bottom',self.dplot)
+        self.area.addDock(self.regDock,'below',self.dTable)
         self.Gwin1d = pg.GraphicsWindow()
         self.Gwin1d.resize(1000,600)
         self.table = pg.TableWidget()
@@ -171,23 +255,61 @@ class App(QtGui.QMainWindow):
         self.dTable.addWidget(self.table)
         self.dtool.hideTitleBar()
         self.Gwin1d.setBackground('w')
+        self.slide_smooth = Slider(0.1,10)
+        self.imv.setCursor(QtCore.Qt.CrossCursor)
+        self.isigprox = pg.SignalProxy(self.imv.scene.sigMouseMoved,rateLimit=60,slot=self.imageHoverEvent)
         #Creating buttons
-        cb.buttons(self)
+        #cb.buttons(self)
         
         #Connecting functions to buttons, that is setting up the action a button does
-        conb.connect(self)
+        #conb.connect(self)
 
-        #Create 1d, 2d, buttons, and table widgets
-        '''
-        pg.setConfigOption('background','w')
-        pg.setConfigOption('foreground','k')
-        IVW.Views(self)
-        #self.plot_view.setMouseTracking(True)
-        #pg.SignalProxy(self.plot_view.scene().sigMouseMoved, rateLimit=60,slot=self.mouseMoveEvent)
-        #self.plot_view.scene().sigMouseMoved.connect(self.mouseMoveEvent)
-        '''
-        Lay(self)
+
+        #Lay(self)
         self.show()
+
+    def imageHoverEvent(self,event):
+        """Show the position, pixel, and value under the mouse cursor.
+        """
+        '''
+        if event.isExit():
+            self.plot2d.setTitle("Not working")
+            return
+        '''
+        #embed()
+        point = event[0]
+        data = self.imv.image
+        vb = self.imv.getView()
+        #embed()
+        point = vb.mapSceneToView(event[0])
+        i, j = point.y(), point.x()
+        i = int(np.clip(i, 0, data.shape[0] - 1))
+        j = int(np.clip(j, 0, data.shape[1] - 1))
+        val = data[i, j]
+        ppos = self.imv.mapToParent(point.toPoint())
+        x, y = ppos.x(), ppos.y()
+        self.plot2d.setTitle("pos: (%0.1f, %0.1f)  pixel: (%d, %d)  value: %g" % (x, y, i, j, val))
+
+    def smooth_update(self):
+        data = self.memory[0]
+        wl = data[0].getData()[0] 
+        flux = data[0].getData()[1]
+        err = data[1].getData()[1]
+        sig = self.slide_smooth.x
+        sm_flux = gaussian_filter1d(flux,sig)
+        self.plt[0].clear()
+        self.plt[0].plot(wl,sm_flux,pen='b')
+        self.plt[0].plot(wl,err,pen='k')
+        self.lrs[0].sigRegionChanged #TODO: doesn't resolve lost region problem
+        self.updateLRplot()
+        self.updateLR()
+
+    def start_smoothing(self):
+        if len(self.plt) > 0:
+            self.dplot.addWidget(self.slide_smooth,row=0,col=1)
+            self.slide_smooth.slider.valueChanged.connect(self.smooth_update)
+            self.memory.append(self.plt[0].listDataItems())
+    #TODO: generalize to multiplots
 
     #TODO: need to be able to update each region not just the most recent
     def updateLR(self):
@@ -252,6 +374,7 @@ class App(QtGui.QMainWindow):
             self.err.pop(loc)
         else:
             qt.QMessageBox.about(self,"Done","Not Removing any plots")
+   
     def remove2D(self):
         choice,ok = qt.QInputDialog.getItem(self,"Removing 2d?","Which plot?:",self.names2d,0,False)
         if ok:
@@ -306,7 +429,7 @@ class App(QtGui.QMainWindow):
         options = qt.QFileDialog.Options()
         options |= qt.QFileDialog.DontUseNativeDialog
         fileName, _ = qt.QFileDialog.getOpenFileName(self,"QFileDialog.getOpenFileName()","","All Files (*);;Fits Files (*.fits);;Python files (*.py)",options = options)
-        name,exten = os.path.splitext(fileName) #Used to place constraints on filetype, exten grabs file extension
+        _,exten = os.path.splitext(fileName) #Used to place constraints on filetype, exten grabs file extension
 
         if exten == ".fits":
             if is1d:
@@ -328,7 +451,7 @@ class App(QtGui.QMainWindow):
         options |= qt.QFileDialog.DontUseNativeDialog
         files, _ = qt.QFileDialog.getOpenFileNames(self, "QFileDialog.getOpenFileNames()", "","All Files (*);;Fits Files (*.fits);;Python files (*.py)", options=options)
         if files:
-            print(files)
+            self.pyp_coadd(files)
     
     def table_create(self,fileName=""):
         
@@ -348,14 +471,12 @@ class App(QtGui.QMainWindow):
         if not(txt == -1):
             pass
 
-    #NOTE: Each fits file extension (i.e. hdul[1]) as an NAXIS memeber that states the 
-    # number of data axes. So in bill's data the header has NAXIS = 1 and then in the 
-    # image files we have NAXIS = 2. We can use this to implement restrictions
     #TODO: Consider Plotting BINNED data, can use stepMode = True, but requires len(x) == len(y) + 1
     def updatePlot(self,count,wl,flux,err):
         self.plt[count].clear()
         pen = pg.mkPen(color='b')
         self.plt[count].addLegend()
+        #wl = np.append(wl, np.mean(np.diff(wl)))
         self.flux.append(self.plt[count].plot(wl,flux,pen=pen,name='Flux'))
         self.err.append(self.plt[count].plot(wl,err,name='Error'))
     
@@ -643,14 +764,15 @@ class App(QtGui.QMainWindow):
                 qt.QMessageBox.about(self,"No Mask","Continuing fit with all data in bounds")
            
             mask = (wl > lr[0]) & (wl < lr[1])
-            #altmask = (wl > lr[0]) & (wl < 4000)
+            altmask = (wl > lr[0]) & (wl < 4200)
             finalwl = wl[mask] 
             index = np.where(flux[mask] == np.max(flux[mask]))
             peakWl = finalwl[index]
             #peakWl = wl[altmask][index]
             peakFl = flux[mask][index]
             #peakFl = flux[altmask][index]
-            
+            #finalwl = wl[mask]
+
             zB = ((peakWl - 0.1*peakWl), (peakWl + 0.1*peakWl))
             zB = (zB[0][0],zB[1][0])#necessary b/c zB is created as array of arrays and numpy fails with array inputs
             sigB = (0.01, 15)
@@ -878,8 +1000,6 @@ class App(QtGui.QMainWindow):
                     output.write("{0}   {1}   {2}\n".format(vals['mean'][i],vals['conf_low'][i]-vals['mean'][i],vals['conf_high'][i]-vals['mean'][i]))
             os.chdir(cwd)
         del(basic_model)
-        #TODO: Let's create an additional file that saves the mean, lower, and upper quantiles such that
-        # the fit can be reproduced while also keeping the full distributions
                 
     def arviz_density(self):
         """
@@ -1225,6 +1345,19 @@ class App(QtGui.QMainWindow):
     # grab the bitmask and turn it into a list of 1's and zeros to use on any image. 
     # then we can just multiply element by element with the desired matrix to get our image
     # (this presumes that bits that are "on" are not desired and should be given a value of 0)
+
+    #TODO: Pypeit coadding that is useful does: (Science - skymodel)*np.sqrt(ivarmodel)*(mask == 0)
+    def pyp_coadd(self,files):
+        multi = []
+        for f in files:
+            hdul = fits.open(f)
+            multi.append((hdul[1].data-hdul[3].data)*np.sqrt(hdul[5].data)*(hdul[9].data==0))
+        data = np.mean(multi,axis=0)
+
+        self.area.addDock(self.plot2d,"right",self.dplot)
+        self.imv.setImage(data,levels=(-10,10))
+        #self.imv.hoverEvent = self.imageHoverEvent
+        self.imv.translate(0,2048)
 
     def remove2D(self):
         self.plot2d.close()

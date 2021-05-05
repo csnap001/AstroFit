@@ -39,4 +39,6 @@ def connect(self):
         self.guessZ.clicked.connect(self.Show_lines)
         self.dLines.clicked.connect(self.Remove_lines)
         self.r2D.clicked.connect(self.remove2D)
+        self.sm.clicked.connect(self.start_smoothing)
+        self.pypeit.clicked.connect(self.openFileNamesDialog)
         return

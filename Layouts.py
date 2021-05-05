@@ -37,3 +37,4 @@ def Lay(self):
         self.dtool.addWidget(self.guessZ,row=1,col=7)
         self.dtool.addWidget(self.dLines,row=1,col=8)
         self.dtool.addWidget(self.r2D,row=1,col=9)
+        self.dtool.addWidget(self.sm,row=2,col=9)
