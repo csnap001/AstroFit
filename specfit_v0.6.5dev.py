@@ -300,8 +300,8 @@ class App(QtGui.QMainWindow):
         sig = self.slide_smooth.x
         sm_flux = gaussian_filter1d(flux,sig)
         self.plt[0].clear()
-        self.plt[0].plot(wl,sm_flux,pen='b')
-        self.plt[0].plot(wl,err,pen='k')
+        self.plt[0].plot(wl,sm_flux,pen='b',stepMode=True)
+        self.plt[0].plot(wl,err,pen='k',stepMode=True)
         self.lrs[0].sigRegionChanged #TODO: doesn't resolve lost region problem
         self.updateLRplot()
         self.updateLR()
@@ -330,20 +330,20 @@ class App(QtGui.QMainWindow):
         if num < 2:
             self.regPlot.append(self.regWin.addPlot(title="Region data"))
             self.regPlot[len(self.regPlot)-1].addLegend()
-            self.regPlot[len(self.regPlot)-1].plot(data[0],data[1],color='w',name='Flux')
-            self.regPlot[len(self.regPlot)-1].plot(data[0],data[2],color='red',name='Error')
+            self.regPlot[len(self.regPlot)-1].plot(data[0],data[1],color='w',name='Flux',stepMode=True)
+            self.regPlot[len(self.regPlot)-1].plot(data[0],data[2],color='red',name='Error',stepMode=True)
             self.regPlot[len(self.regPlot)-1].sigXRangeChanged.connect(self.updateLR)
         elif num >= 2 and num < 4:
             self.regPlot.append(self.regWin.addPlot(row=1,col=num-2,title="Region data"))
             self.regPlot[len(self.regPlot)-1].addLegend()
-            self.regPlot[len(self.regPlot)-1].plot(data[0],data[1],color='w',name='Flux')
-            self.regPlot[len(self.regPlot)-1].plot(data[0],data[2],color='red',name='Error')
+            self.regPlot[len(self.regPlot)-1].plot(data[0],data[1],color='w',name='Flux',stepMode=True)
+            self.regPlot[len(self.regPlot)-1].plot(data[0],data[2],color='red',name='Error',stepMode=True)
             self.regPlot[len(self.regPlot)-1].sigXRangeChanged.connect(self.updateLR)
         elif num >= 4 and num < 6:
             self.regPlot.append(self.regWin.addPlot(row=2,col=num-4,title="Region data"))
             self.regPlot[len(self.regPlot)-1].addLegend()
-            self.regPlot[len(self.regPlot)-1].plot(data[0],data[1],color='w',name='Flux')
-            self.regPlot[len(self.regPlot)-1].plot(data[0],data[2],color='red',name='Error')
+            self.regPlot[len(self.regPlot)-1].plot(data[0],data[1],color='w',name='Flux',stepMode=True)
+            self.regPlot[len(self.regPlot)-1].plot(data[0],data[2],color='red',name='Error',stepMode=True)
             self.regPlot[len(self.regPlot)-1].sigXRangeChanged.connect(self.updateLR)
 
     def addPlot(self,name):
@@ -439,7 +439,7 @@ class App(QtGui.QMainWindow):
                 self.show_2d_fits(fileName=fileName)
             if isTab:
                 self.table_create(fileName=fileName)
-        if exten == ".txt":
+        elif exten == ".txt":
             strs = fileName.split('/')
             check = self.addPlot(name=strs[len(strs)-1])
             if check != -1:
@@ -479,9 +479,9 @@ class App(QtGui.QMainWindow):
         self.plt[count].clear()
         pen = pg.mkPen(color='b')
         self.plt[count].addLegend()
-        #wl = np.append(wl, np.mean(np.diff(wl)))
-        self.flux.append(self.plt[count].plot(wl,flux,pen=pen,name='Flux'))
-        self.err.append(self.plt[count].plot(wl,err,name='Error'))
+        wl = np.append(wl, np.mean(np.diff(wl)) + wl[-1])
+        self.flux.append(self.plt[count].plot(wl,flux,pen=pen,name='Flux',stepMode=True))
+        self.err.append(self.plt[count].plot(wl,err,name='Error',stepMode=True))
     
     def headerDisplay(self,hdul):
         hdus = []
@@ -499,7 +499,6 @@ class App(QtGui.QMainWindow):
         count = len(self.plt) - 1
         if fileName:
             data = ascii.read(fileName)
-            embed()
             while True:
                 x, ok = qt.QInputDialog.getItem(self,"data","Choose your x axis:",data.keys(),0,False)
                 y, ok = qt.QInputDialog.getItem(self,"data","Choose your y axis:",data.keys(),0,False)
@@ -572,8 +571,9 @@ class App(QtGui.QMainWindow):
                 data_names[name] = np.sqrt(data_names[name])
 
             self.plt[dat_choice].clear()
-            self.flux[dat_choice] = self.plt[dat_choice].plot(data_names['wl'],data_names['flux'],pen='b')
-            self.err[dat_choice] = self.plt[dat_choice].plot(data_names['wl'],data_names['err'])
+            data_names['wl'] = np.append(data_names['wl'],np.mean(np.diff['wl'])+data_names['wl'])
+            self.flux[dat_choice] = self.plt[dat_choice].plot(data_names['wl'],data_names['flux'],pen='b',stepMode=True)
+            self.err[dat_choice] = self.plt[dat_choice].plot(data_names['wl'],data_names['err'],stepMode=True)
 
             Happy, ok = qt.QInputDialog.getItem(self,"Good","Finished?:",["True","False"],0,False)
             if Happy == "True":
