@@ -50,7 +50,7 @@ import PyQt5.QtWidgets as qt
 from pyqtgraph.Qt import QtCore,QtGui
 import pyqtgraph as pg
 import pandas as pd
-from astropy.io import fits
+from astropy.io import fits,ascii
 from astropy.table import Table
 from astropy import units as u
 from astropy.modeling import models
@@ -238,8 +238,8 @@ class App(QtGui.QMainWindow):
         self.dTable = Dock("Table",size=(500,300))
         self.regDock = Dock("Regions",size=(500,300))
         self.plot2d = Dock("2d image",size=(300,300))
-        self.imv = pg.ImageView()
-        self.plot2d.addWidget(self.imv)#Not sure how to remove widgets, so instead setting
+        #self.imv = pg.ImageView()
+        #self.plot2d.addWidget(self.imv)#Not sure how to remove widgets, so instead setting
         # up structure where we open and close the dock and change the data on request
         # TODO: widgets also have "close" function, or at least imageviews do
         self.regWin = pg.GraphicsWindow()
@@ -247,6 +247,7 @@ class App(QtGui.QMainWindow):
         self.area.addDock(self.dplot,'bottom',self.dtool)
         self.area.addDock(self.dTable,'bottom',self.dplot)
         self.area.addDock(self.regDock,'below',self.dTable)
+        self.area.addDock(self.plot2d,"right",self.dplot)
         self.Gwin1d = pg.GraphicsWindow()
         self.Gwin1d.resize(1000,600)
         self.table = pg.TableWidget()
@@ -256,8 +257,8 @@ class App(QtGui.QMainWindow):
         self.dtool.hideTitleBar()
         self.Gwin1d.setBackground('w')
         self.slide_smooth = Slider(0.1,10)
-        self.imv.setCursor(QtCore.Qt.CrossCursor)
-        self.isigprox = pg.SignalProxy(self.imv.scene.sigMouseMoved,rateLimit=60,slot=self.imageHoverEvent)
+        #self.imv.setCursor(QtCore.Qt.CrossCursor)
+        #self.isigprox = pg.SignalProxy(self.imv.scene.sigMouseMoved,rateLimit=60,slot=self.imageHoverEvent)
         #Creating buttons
         #cb.buttons(self)
         
@@ -283,9 +284,10 @@ class App(QtGui.QMainWindow):
         #embed()
         point = vb.mapSceneToView(event[0])
         i, j = point.y(), point.x()
+        #embed()
         i = int(np.clip(i, 0, data.shape[0] - 1))
         j = int(np.clip(j, 0, data.shape[1] - 1))
-        val = data[i, j]
+        val = data[j, i]
         ppos = self.imv.mapToParent(point.toPoint())
         x, y = ppos.x(), ppos.y()
         self.plot2d.setTitle("pos: (%0.1f, %0.1f)  pixel: (%d, %d)  value: %g" % (x, y, i, j, val))
@@ -375,11 +377,6 @@ class App(QtGui.QMainWindow):
         else:
             qt.QMessageBox.about(self,"Done","Not Removing any plots")
    
-    def remove2D(self):
-        choice,ok = qt.QInputDialog.getItem(self,"Removing 2d?","Which plot?:",self.names2d,0,False)
-        if ok:
-            loc = self.names2d.index(choice)
-            self.dplot.remove
 
     def removeRegPlot(self):
         check = [self.regPlot[i].getViewBox().viewRange()[0][0] for i in np.arange(len(self.regPlot))]
@@ -442,6 +439,12 @@ class App(QtGui.QMainWindow):
                 self.show_2d_fits(fileName=fileName)
             if isTab:
                 self.table_create(fileName=fileName)
+        if exten == ".txt":
+            strs = fileName.split('/')
+            check = self.addPlot(name=strs[len(strs)-1])
+            if check != -1:
+                self.plot_1d_txt(fileName=fileName)
+                self.names1d.append(strs[len(strs) - 1])
         else:
             qt.QMessageBox.about(self,"Opening File","ERROR: (Program Name) only supports .fits files")
             #TODO: Need to come up with name for GUI application
@@ -491,6 +494,24 @@ class App(QtGui.QMainWindow):
                 strng += k + "= " + str(item.header[k]) + "\n"
             hdus.append(strng)
             qt.QMessageBox.about(self,"Showing {}".format(item),strng)
+
+    def plot_1d_txt(self,fileName=""):
+        count = len(self.plt) - 1
+        if fileName:
+            data = ascii.read(fileName)
+            embed()
+            while True:
+                x, ok = qt.QInputDialog.getItem(self,"data","Choose your x axis:",data.keys(),0,False)
+                y, ok = qt.QInputDialog.getItem(self,"data","Choose your y axis:",data.keys(),0,False)
+                err, ok = qt.QInputDialog.getItem(self,"data","Choose your err axis:",data.keys(),0,False)
+                x = data[x]
+                y = data[y]
+                err = data[err]
+                if (x is not None) and (y is not None): self.updatePlot(count,x,y,err)
+                else: qt.QMessageBox.about(self,"Showing {0},{1}".format(x,y),"One data set is not valid")
+                Happy, ok = qt.QInputDialog.getItem(self,"Good","Happy?:",["True","False"],0,False)
+                if Happy == "True":
+                    break
             
     def plot_1d_fits(self,fileName=""):
         count = len(self.plt) - 1
@@ -1353,14 +1374,20 @@ class App(QtGui.QMainWindow):
             hdul = fits.open(f)
             multi.append((hdul[1].data-hdul[3].data)*np.sqrt(hdul[5].data)*(hdul[9].data==0))
         data = np.mean(multi,axis=0)
-
-        self.area.addDock(self.plot2d,"right",self.dplot)
+        
+        self.imv = pg.ImageView(view=pg.PlotItem())
+        self.plot2d.addWidget(self.imv)
+        if data.ndim != 2:
+            qt.QMessageBox.about(self,"Error","Data has {0} but images require 2".format(data.ndim))
+            self.imv.close()
+            return
         self.imv.setImage(data,levels=(-10,10))
-        #self.imv.hoverEvent = self.imageHoverEvent
-        self.imv.translate(0,2048)
+        self.imv.setCursor(QtCore.Qt.CrossCursor)
+        self.isigprox = pg.SignalProxy(self.imv.scene.sigMouseMoved,rateLimit=60,slot=self.imageHoverEvent)
 
     def remove2D(self):
-        self.plot2d.close()
+        #self.plot2d.close()
+        self.imv.close()
 
     def show_2d_fits(self,fileName = ""):
         try: hdul = fits.open(fileName)
@@ -1373,10 +1400,22 @@ class App(QtGui.QMainWindow):
         for i in header:
             if i.find('EXT0') != -1:
                 s.append(i)
-        choice, ok = qt.QInputDialog.getItem(self,"Which extension?","choose a data set:",[header[i] for i in s],0,False)        
+        if len(s) == 0:
+            s = np.arange(len(hdul))
+            choice, ok = qt.QInputDialog.getItem(self,"Which extension?","choose a data set:",s.astype(str),0,False)
+            choice = int(choice)
+        else:
+            choice, ok = qt.QInputDialog.getItem(self,"Which extension?","choose a data set:",[header[i] for i in s],0,False)        
         data = hdul[choice].data
-        self.area.addDock(self.plot2d,"right",self.dTable)
+        self.imv = pg.ImageView(view=pg.PlotItem())
+        self.plot2d.addWidget(self.imv)
+        if data.ndim != 2:
+            qt.QMessageBox.about(self,"Error","Data has {0} but images require 2".format(data.ndim))
+            self.imv.close()
+            return
         self.imv.setImage(data)
+        self.imv.setCursor(QtCore.Qt.CrossCursor)
+        self.isigprox = pg.SignalProxy(self.imv.scene.sigMouseMoved,rateLimit=60,slot=self.imageHoverEvent)
     
             
 if __name__ == '__main__':
