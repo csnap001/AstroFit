@@ -280,7 +280,7 @@ class App(QtGui.QMainWindow):
         #embed()
         point = event[0]
         data = self.imv.image
-        vb = self.imv.getView()
+        vb = self.imv.getView().getViewBox()
         #embed()
         point = vb.mapSceneToView(event[0])
         i, j = point.y(), point.x()
@@ -302,9 +302,10 @@ class App(QtGui.QMainWindow):
         self.plt[0].clear()
         self.plt[0].plot(wl,sm_flux,pen='b',stepMode=True)
         self.plt[0].plot(wl,err,pen='k',stepMode=True)
-        self.lrs[0].sigRegionChanged #TODO: doesn't resolve lost region problem
-        self.updateLRplot()
-        self.updateLR()
+        if len(self.lrs) > 0:
+            self.lrs[0].sigRegionChanged #TODO: doesn't resolve lost region problem
+            self.updateLRplot()
+            self.updateLR()
 
     def start_smoothing(self):
         if len(self.plt) > 0:
