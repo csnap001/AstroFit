@@ -61,13 +61,11 @@ import create_buttons as cb
 import connect_buttons as conb
 from Layouts import Lay
 import time
-from My_Packages import FuncDef as fxn
 import pymc3 as pm
 import arviz as az
 import matplotlib.pyplot as plt
 from functools import partial
 import os
-import corner
 import scipy as sc
 from IPython import embed
 from astropy import cosmology
@@ -109,6 +107,20 @@ def conf_high(data,half=0.34):
     print('finished high')
     return mean + i*0.01*sd
 
+def Powpgauss(x,A0,x0,b0,f0,a0,cent):
+    return f0*(x/cent)**a0 + abs(A0)*np.exp(-((x-x0)/(np.sqrt(2)*b0))**2)
+
+def Pow(x,f0,a0,cent):
+    return f0*(x/cent)**a0
+
+def gauss0(x,A0,x0,b0):
+    return abs(A0)*np.exp(-(((x-x0)/b0)**2.))
+
+def linear(x,a,b):
+    return a*x + b
+
+def polynomial(x,*a):
+    return sum([p*(x**i) for i,p in enumerate(a)])
 
 class Slider(QWidget):
     def __init__(self, minimum, maximum, parent=None):
@@ -613,7 +625,7 @@ class App(QtGui.QMainWindow):
                 finalerr = err[mask]
                 ind = np.where(finalflux == np.max(finalflux))
                 maxwl = finalwl[ind]
-                cont_pdf = fxn.Pow(maxwl,samples['amp'],samples['alpha'],samples['unity'])
+                cont_pdf = Pow(maxwl,samples['amp'],samples['alpha'],samples['unity'])
                 left = qt.QInputDialog.getDouble(self,"left","What velocity left maximum?: ",0,False)
                 right = qt.QInputDialog.getDouble(self,"right","What velocity right maximum?: ",0,False)
                 newMask = (finalwl > maxwl*(1-(left[0]/3e5))) & (finalwl < maxwl*(1+(right[0]/3e5)))
@@ -759,7 +771,7 @@ class App(QtGui.QMainWindow):
             ampB = (0,4*peakFl)
             ampB = (ampB[0],ampB[1][0])#same as z
             #embed()
-            self.Fitter(fxn.Powpgauss,data,flux[mask],err[mask],finalwl,[ampB,zB,sigB,(0,np.max(flux[mask])),(-5,5),(lr[0],lr[1])],name='EW',plt_name=dat_choice)
+            self.Fitter(Powpgauss,data,flux[mask],err[mask],finalwl,[ampB,zB,sigB,(0,np.max(flux[mask])),(-5,5),(lr[0],lr[1])],name='EW',plt_name=dat_choice)
 
         else:
             qt.QMessageBox.about(self,"No data on screen","Not fitting")
@@ -824,11 +836,11 @@ class App(QtGui.QMainWindow):
         func, ok = qt.QInputDialog.getItem(self,"Get function","Function: ",items,0,False)
         if func == 'Power Law' and ok:
             #TODO: Force left bound as "centroid" in Pow?
-            self.Fitter(fxn.Pow,data,flux,err,wl,[(0,np.max(flux)),(-3,3),(np.min(wl),np.max(wl))],name='continuum',plt_name=dat_choice,cname=func)
+            self.Fitter(Pow,data,flux,err,wl,[(0,np.max(flux)),(-3,3),(np.min(wl),np.max(wl))],name='continuum',plt_name=dat_choice,cname=func)
             self.cname = 'pl'
             self.contfit[1].append('pl')
         elif func == 'Linear' and ok:
-            self.line = partial(fxn.linear,b=lr[0])
+            self.line = partial(linear,b=lr[0])
             self.Fitter(self.line,data,flux,err,wl,[(np.min(flux),np.max(flux)),(np.min(flux)/np.max(wl),np.max(flux)/np.min(wl))],name='continuum',plt_name=dat_choice,cname=func)
             #TODO: is the slope range reasonable?
             self.cname = 'l'
@@ -842,7 +854,7 @@ class App(QtGui.QMainWindow):
                 guess.append((np.min(flux),np.max(flux)))
                 for i in range(order):
                     guess.append(((np.min(flux)/np.max(wl))**(i+1),(np.max(flux)/np.min(wl)**(i+1))))
-                self.Fitter(fxn.polynomial,data,flux,err,wl,guess,name='continuum',plt_name=dat_choice,cname=func,order=order)
+                self.Fitter(polynomial,data,flux,err,wl,guess,name='continuum',plt_name=dat_choice,cname=func,order=order)
         else:#TODO: consider using else, this is kind of weird coding
             qt.QMessageBox.about(self,"Continuum","Not fitting continuum")
         
@@ -941,8 +953,8 @@ class App(QtGui.QMainWindow):
             if name in self.pdfs.keys():
                 name += ".1"
             self.pdfs[name] = (samples,vals['mean'])
-            ewPdf = np.sqrt(2*np.pi)*np.array(samples['amp'])*np.array(samples['sigma'])/fxn.Pow(vals['mean']['centroid'],samples['cont_amp'],samples['alpha'],samples['unity'])
-            ewMeas = np.sqrt(2*np.pi)*vals['mean']['amp']*vals['mean']['sigma']/fxn.Pow(vals['mean']['centroid'],vals['mean']['cont_amp'],vals['mean']['alpha'],vals['mean']['unity'])
+            ewPdf = np.sqrt(2*np.pi)*np.array(samples['amp'])*np.array(samples['sigma'])/Pow(vals['mean']['centroid'],samples['cont_amp'],samples['alpha'],samples['unity'])
+            ewMeas = np.sqrt(2*np.pi)*vals['mean']['amp']*vals['mean']['sigma']/Pow(vals['mean']['centroid'],vals['mean']['cont_amp'],vals['mean']['alpha'],vals['mean']['unity'])
             self.pdfs['EWPDF'] = [ewPdf,pd.core.series.Series([ewMeas],index=["EW"])]
             pen = (0,100,0)
             cont = 1.0
@@ -1130,22 +1142,6 @@ class App(QtGui.QMainWindow):
 
         return converted_meas, conv_meas_errs
 
-    #deprecated
-    def showPDFS(self):
-        '''
-        Helper function for displaying corner plot of fit parameters.
-        This will display the results of a given fit.
-        TODO: self.pdfs should hold all non-deleted fits (that is, it should have all continua fits)
-        '''
-        func, ok = qt.QInputDialog.getItem(self,"Get Fit","Which Fit?: ",self.pdfs.keys(),0,False)
-
-        if ok:
-            labels = self.pdfs[func][1].keys()
-            corner.corner(self.pdfs[func][0],quantiles=[0.16,0.5,0.84],show_titles=True,
-                        labels=labels,verbose=True,plot_contours=True,title_fmt=".3E",truths=self.pdfs[func][1],
-                        levels=(0.68,)) #must be (values, # of parameters), (i.e. (365,4) corresponds to a fit with four parameters)
-            plt.show()
-    #End deprecated 
 
     def plotColoring(self,isFlux = False, isErr=False):
         choice, ok = qt.QInputDialog.getItem(self,"Which to color?","Choose data set:",self.names1d,0,False)
@@ -1228,7 +1224,7 @@ class App(QtGui.QMainWindow):
             fl = np.random.uniform(0.1,2.0)
             Flux.append(fl)
             A = fl/(np.sqrt(2*np.pi)*sig)
-            gauss = fxn.gauss0(wl,A,x_0,np.sqrt(2)*sig)
+            gauss = gauss0(wl,A,x_0,np.sqrt(2)*sig)
             y += gauss
             data[0].setData(wl,y)
             win,ok = qt.QInputDialog.getInt(self,"Flux: {0}, 1-sig: {1}, 2-sig: {2}, 3-sig: {3}, 5-sig: {4}".format(fl,sig_data[i],2*sig_data[i],3*sig_data[i],5*sig_data[i]),"did you find it?(1=yes,0=no): ",0,0,1,1)
