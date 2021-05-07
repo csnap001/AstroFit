@@ -59,9 +59,7 @@ import numpy as np
 import sys
 import create_buttons as cb
 import connect_buttons as conb
-import Initialize_View_Widgets as IVW
 from Layouts import Lay
-from Get_Pix_Position import Pos, off
 import time
 from My_Packages import FuncDef as fxn
 import pymc3 as pm
@@ -192,39 +190,12 @@ class App(QtGui.QMainWindow):
 
         self.toolbar = QToolBar("Spec Tools")
         self.addToolBar(self.toolbar)
+        #Creating buttons
         cb.buttons(self)
+        #Connecting buttons to functions
         conb.connect(self)
-        self.toolbar.addWidget(self.imgbut)
-        self.toolbar.addWidget(self.specbut)
-        self.toolbar.addWidget(self.rm1dPlot)
-        self.toolbar.addWidget(self.addReg)
-        self.toolbar.addWidget(self.remReg)
-        self.toolbar.addWidget(self.tbl)
-        self.toolbar.addWidget(self.ewBut)
-        self.toolbar.addWidget(self.nonPEW)
-        self.toolbar.addWidget(self.lincent)
-        self.toolbar.addWidget(self.addImgbut)
-        self.toolbar.addWidget(self.Dcolorbut)
-        self.toolbar.addWidget(self.EcolorBut)
-        self.toolbar.addWidget(self.contBut)
-        self.toolbar.addWidget(self.getFitsBut)
-        self.toolbar.addWidget(self.fluxToLum)
-        self.toolbar.addWidget(self.Math)
-        self.toolbar.addWidget(self.aztrace)
-        self.toolbar.addWidget(self.azdensity)
-        self.toolbar.addWidget(self.azautocorr)
-        self.toolbar.addWidget(self.azenergy)
-        self.toolbar.addWidget(self.azforest)
-        self.toolbar.addWidget(self.azjoint)
-        self.toolbar.addWidget(self.azparallel)
-        self.toolbar.addWidget(self.azposterior)
-        self.toolbar.addWidget(self.save)
-        self.toolbar.addWidget(self.artgauss)
-        self.toolbar.addWidget(self.guessZ)
-        self.toolbar.addWidget(self.dLines)
-        self.toolbar.addWidget(self.r2D)
-        self.toolbar.addWidget(self.sm)
-        self.toolbar.addWidget(self.pypeit)
+        #Placing buttons in toolbar
+        Lay(self)
 
 
     def initUI(self):
@@ -238,9 +209,6 @@ class App(QtGui.QMainWindow):
         self.dTable = Dock("Table",size=(500,300))
         self.regDock = Dock("Regions",size=(500,300))
         self.plot2d = Dock("2d image",size=(300,300))
-        #self.imv = pg.ImageView()
-        #self.plot2d.addWidget(self.imv)#Not sure how to remove widgets, so instead setting
-        # up structure where we open and close the dock and change the data on request
         # TODO: widgets also have "close" function, or at least imageviews do
         self.regWin = pg.GraphicsWindow()
         self.area.addDock(self.dtool,'top')
@@ -257,16 +225,7 @@ class App(QtGui.QMainWindow):
         self.dtool.hideTitleBar()
         self.Gwin1d.setBackground('w')
         self.slide_smooth = Slider(0.1,10)
-        #self.imv.setCursor(QtCore.Qt.CrossCursor)
-        #self.isigprox = pg.SignalProxy(self.imv.scene.sigMouseMoved,rateLimit=60,slot=self.imageHoverEvent)
-        #Creating buttons
-        #cb.buttons(self)
-        
-        #Connecting functions to buttons, that is setting up the action a button does
-        #conb.connect(self)
 
-
-        #Lay(self)
         self.show()
 
     def imageHoverEvent(self,event):
@@ -314,7 +273,6 @@ class App(QtGui.QMainWindow):
             self.memory.append(self.plt[0].listDataItems())
     #TODO: generalize to multiplots
 
-    #TODO: need to be able to update each region not just the most recent
     def updateLR(self):
         #TODO: The y-range for each plot is only connected to the most recent region, why?
         for i in range(len(self.lrs)):
@@ -1166,8 +1124,8 @@ class App(QtGui.QMainWindow):
         conv_meas_errs = flux_to_lum(measurement_errs, obj_lum_dist_cm)
         converted_meas = np.multiply(converted_meas, 1.+ z)
         conv_meas_errs = np.multiply(conv_meas_errs, 1.+ z)
-        self.plt[dat_choice].plot(wl,converted_meas,pen='b')
-        self.plt[dat_choice].plot(wl,conv_meas_errs)
+        self.plt[dat_choice].plot(wl,converted_meas,pen='b',stepMode=True)
+        self.plt[dat_choice].plot(wl,conv_meas_errs,stepMode=True)
 
 
         return converted_meas, conv_meas_errs
