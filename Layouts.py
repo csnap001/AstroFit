@@ -21,7 +21,6 @@ def Lay(self):
         self.toolbar.addWidget(self.Dcolorbut)
         self.toolbar.addWidget(self.EcolorBut)
         self.toolbar.addWidget(self.contBut)
-        self.toolbar.addWidget(self.getFitsBut)
         self.toolbar.addWidget(self.fluxToLum)
         self.toolbar.addWidget(self.Math)
         self.toolbar.addWidget(self.aztrace)

@@ -32,10 +32,18 @@ at the same redshift (would be nice to link positions, needs helper update funct
 
 TODO: Plot parameter space (image_view?) and allow user to move through space and choose points
 then plot using those parameters over original data set. This is good for visualization.
+This will make clear whether a given fit behaved as expected.
+
+TODO: Add in capability to choose what fitting method to use (i.e. NUTS, Hamiltonian, MCMC)
+as these pre-exist in the pymc3 framework. (some consideration should be given to upgrading
+to pymc4)
 
 TODO: add in slider for smoothing plots (need to hold original data set to be able to reset)
 Created Slider class to handle this. Connect Slider widget to update plot with gaussian smoothing
 function. example: Slide = Slider(lower_bound,Upper_bound), Slide.valueChanged.connect(smooth_plot)
+
+TODO: Add in ability to remove various added plotItems (i.e. fits and whatnot), there exists a 
+removeItem(item) function
 
 Module for GUI spectroscopic fitting environment based on pymc3
 and astropy. (Possibly, desired) This module will also have basic image arithmatic capabilities.
@@ -55,6 +63,7 @@ from astropy.table import Table
 from astropy import units as u
 from astropy.modeling import models
 from pyqtgraph.dockarea import *
+import multiprocessing as multi
 import numpy as np
 import sys
 import create_buttons as cb
@@ -293,7 +302,8 @@ class App(QtGui.QMainWindow):
                 self.lrs[i].setRegion(xlen)
                 abdata = self.regPlot[i].listDataItems()
                 data = (abdata[0].getData()[0],abdata[0].getData()[1],abdata[1].getData()[1])
-                mask = (data[0] > self.regPlot[i].getViewBox().viewRange()[0][0]) & (data[0] < self.regPlot[i].getViewBox().viewRange()[0][1])
+                mask = (data[0][:-1] > self.regPlot[i].getViewBox().viewRange()[0][0]) & (data[0][:-1] < self.regPlot[i].getViewBox().viewRange()[0][1])
+                #mask was of different length then data, therefore had to adjust using slice
                 if len(data[1][mask]) > 0: self.yrange = [np.min(data[1][mask]) - 0.8*np.min(data[1][mask]),1.5*np.max(data[1][mask])]
 
     def addRegionPlot(self,data):
@@ -530,7 +540,7 @@ class App(QtGui.QMainWindow):
         dat_choice = self.names1d.index(choice)
         data = self.plt[dat_choice].listDataItems()
         data_names = {"wl":data[0].getData()[0],"flux":data[0].getData()[1],"err":data[1].getData()[1]}
-
+        #data_names['wl'] = np.append(data_names['wl'],np.mean(np.diff(data_names['wl']))+data_names['wl'][-1])
         while True:
             name, ok = qt.QInputDialog.getItem(self,"data","Which data element?:",data_names.keys(),0,False)
             if not(ok):
@@ -542,7 +552,6 @@ class App(QtGui.QMainWindow):
                 data_names[name] = np.sqrt(data_names[name])
 
             self.plt[dat_choice].clear()
-            data_names['wl'] = np.append(data_names['wl'],np.mean(np.diff(data_names['wl']))+data_names['wl'])
             self.flux[dat_choice] = self.plt[dat_choice].plot(data_names['wl'],data_names['flux'],pen='b',stepMode=True)
             self.err[dat_choice] = self.plt[dat_choice].plot(data_names['wl'],data_names['err'],stepMode=True)
 
@@ -619,9 +628,9 @@ class App(QtGui.QMainWindow):
                 else:
                     qt.QMessageBox.about(self,"Done","Exiting without fit")
                     return
-                mask = (wl > lr[0]) & (wl < lr[1])
+                mask = (wl[:-1] > lr[0]) & (wl[:-1] < lr[1])
                 finalflux = flux[mask]
-                finalwl = wl[mask]
+                finalwl = wl[:-1][mask]
                 finalerr = err[mask]
                 ind = np.where(finalflux == np.max(finalflux))
                 maxwl = finalwl[ind]
@@ -682,7 +691,7 @@ class App(QtGui.QMainWindow):
             #TODO: in order to get full uncertainty of given quantity, need to define
             #prior probability as the distribution of the continuum 
             # (which has its own prior of course)
-            mask = (wl > lr[0]) & (wl < lr[1])
+            mask = (wl[:-1] > lr[0]) & (wl[:-1] < lr[1])
             finalflux = flux[mask]
             finalwl = wl[mask]
             finalerr = err[mask]
@@ -721,7 +730,7 @@ class App(QtGui.QMainWindow):
 
 
         if len(data) > 0:
-            wl = data[0].getData()[0]
+            wl = data[0].getData()[0][:-1]
             flux = data[0].getData()[1]
             err = data[1].getData()[1]
 
@@ -800,9 +809,9 @@ class App(QtGui.QMainWindow):
         dat_choice = self.names1d.index(choice)
         data = self.plt[dat_choice].listDataItems()
         lr = self.lrs[mask_choice].getRegion()
-        mask = (data[0].getData()[0] > lr[0]) & (data[0].getData()[0] < lr[1])
+        mask = (data[0].getData()[0][:-1] > lr[0]) & (data[0].getData()[0][:-1] < lr[1])
         flux = data[0].getData()[1][mask]
-        wl = data[0].getData()[0][mask]
+        wl = data[0].getData()[0][:-1][mask]
         err = data[1].getData()[1][mask]
         
         Ans = qt.QMessageBox.question(self,"Masking","Mask Emission and Absorption lines?",qt.QMessageBox.Yes|qt.QMessageBox.No,qt.QMessageBox.No)
@@ -930,7 +939,11 @@ class App(QtGui.QMainWindow):
             Y_obs = pm.Normal("Y_obs",mu=mu,sigma=err.astype(np.float32),observed=flux.astype(np.float32))
             
             #trace = pm.sample(20000,tune=5000,cores=6,init='adapt_diag',step=pm.step_methods.Metropolis())#used for testing parameter space
-            trace = pm.sample(10000,tune=5000,target_accept=0.8,cores=10)
+            cores = multi.cpu_count()
+            if cores >= 10:
+                trace = pm.sample(10000,tune=5000,target_accept=0.8,cores=10)
+            else:
+                trace = pm.sample(10000,tune=5000,target_accept=0.8,cores=cores)#TODO: might be overworking computers here
             #NOTE: vals['mean'].keys() gives the parameter names
             if cname == "Power Law":
                 vals = az.summary(trace,round_to=10,var_names=['amp','alpha','unity'])
@@ -1155,6 +1168,7 @@ class App(QtGui.QMainWindow):
         if not(self.err==None) and isErr:
             self.err[dat_choice].setPen(color)
 
+    #TODO: broken, got to deal with len(y) + 1 = len(x) details for step plot
     def artificial_gauss(self):
         '''
         Module for adding gaussians to existing data.
@@ -1175,7 +1189,7 @@ class App(QtGui.QMainWindow):
 
         mask_choice = check.index(float(reg))
         lr = self.lrs[mask_choice].getRegion()
-        mask = (data[0].getData()[0] > lr[0]) & (data[0].getData()[0] < lr[1])
+        mask = (data[0].getData()[0][:-1] > lr[0]) & (data[0].getData()[0][:-1] < lr[1])
         origFlux = data[0].getData()[1]
         origWl = data[0].getData()[0]
         flux = data[0].getData()[1][mask]
