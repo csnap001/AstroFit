@@ -23,7 +23,6 @@ def buttons(self):
         self.Dcolorbut = qt.QPushButton("Data color",self)
         self.EcolorBut = qt.QPushButton("Err color", self)
         self.contBut = qt.QPushButton("Fit Cont", self)
-        self.getFitsBut = qt.QPushButton("Get Fits",self)
         self.fluxToLum = qt.QPushButton("F to L",self)
         self.Math = qt.QPushButton("Math",self)
         self.aztrace = qt.QPushButton("Show Trace",self)

@@ -21,7 +21,6 @@ def connect(self):
         self.nonPEW.clicked.connect(self.nonParamEW)
         self.lincent.clicked.connect(self.LineCenter)
         self.contBut.clicked.connect(self.Cont_Fit)
-        self.getFitsBut.clicked.connect(self.showPDFS)
         self.addReg.clicked.connect(self.whichPlot)
         self.remReg.clicked.connect(self.removeRegPlot)
         self.fluxToLum.clicked.connect(self.Flux_to_Lum)

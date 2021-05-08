@@ -542,7 +542,7 @@ class App(QtGui.QMainWindow):
                 data_names[name] = np.sqrt(data_names[name])
 
             self.plt[dat_choice].clear()
-            data_names['wl'] = np.append(data_names['wl'],np.mean(np.diff['wl'])+data_names['wl'])
+            data_names['wl'] = np.append(data_names['wl'],np.mean(np.diff(data_names['wl']))+data_names['wl'])
             self.flux[dat_choice] = self.plt[dat_choice].plot(data_names['wl'],data_names['flux'],pen='b',stepMode=True)
             self.err[dat_choice] = self.plt[dat_choice].plot(data_names['wl'],data_names['err'],stepMode=True)
 
