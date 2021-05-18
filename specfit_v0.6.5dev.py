@@ -55,6 +55,7 @@ Class Functions:
 """
 
 import PyQt5.QtWidgets as qt
+from astropy.io.fits.hdu.table import BinTableHDU
 from pyqtgraph.Qt import QtCore,QtGui
 import pyqtgraph as pg
 import pandas as pd
@@ -83,6 +84,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication, QHBoxLayout, QLabel, QSizePolicy, QSlider, QSpacerItem, \
     QVBoxLayout, QWidget, QToolBar
 from scipy.ndimage import gaussian_filter1d
+from spectres import spectres
 
 def conf_low(data,half=0.34):
     mean = np.mean(data)
@@ -95,9 +97,9 @@ def conf_low(data,half=0.34):
         i += 1
         conf = kde.integrate_box_1d(mean-i*0.01*sd,mean)
         if i > 500:
-            print("timeout: distribution has problems")
+            #print("timeout: distribution has problems")
             break
-    print("finished low")
+    #print("finished low")
     return mean - i*0.01*sd
 
 def conf_high(data,half=0.34):
@@ -111,9 +113,9 @@ def conf_high(data,half=0.34):
         i += 1
         conf = kde.integrate_box_1d(mean,mean+i*0.01*sd)
         if i > 500:
-            print("timeout: distribution has problems")
+            #print("timeout: distribution has problems")
             break
-    print('finished high')
+    #print('finished high')
     return mean + i*0.01*sd
 
 def Powpgauss(x,A0,x0,b0,f0,a0,cent):
@@ -402,6 +404,11 @@ class App(QtGui.QMainWindow):
         self.isTab = True
         self.openFileNameDialog(isTab = self.isTab)
 
+    def coadd(self):
+        self.openFileNamesDialog(iscoadd=True)
+    
+    def open_pyp(self):
+        self.openFileNamesDialog(ispypeit=True)
     #clear
     def openFileNameDialog(self,is1d = False ,is2d = False,isTab = False):
         options = qt.QFileDialog.Options()
@@ -430,12 +437,15 @@ class App(QtGui.QMainWindow):
             qt.QMessageBox.about(self,"Opening File","ERROR: (Program Name) only supports .fits files")
             #TODO: Need to come up with name for GUI application
 
-    def openFileNamesDialog(self):
+    def openFileNamesDialog(self,iscoadd=False,ispypeit=False):
         options = qt.QFileDialog.Options()
         options |= qt.QFileDialog.DontUseNativeDialog
         files, _ = qt.QFileDialog.getOpenFileNames(self, "QFileDialog.getOpenFileNames()", "","All Files (*);;Fits Files (*.fits);;Python files (*.py)", options=options)
-        if files:
+        if files and ispypeit:
             self.pyp_coadd(files)
+        if files and iscoadd:
+            #embed()
+            self.coadd_1d(files)
     
     def table_create(self,fileName=""):
         
@@ -819,6 +829,10 @@ class App(QtGui.QMainWindow):
         if Ans==qt.QMessageBox.Yes:
             z, ok = qt.QInputDialog.getDouble(self,"Get redshift","z:",2.0,0.0,10.0,10)
             if ok:
+                wlSiII = 1260*(1+z)
+                wlOISiII = 1303*(1+z)
+                wlCII = 1334*(1+z)
+                wlSiIV = 1393*(1+z)
                 wlCIV = 1550*(1+z)
                 wlHeII = 1640*(1+z)#TODO: re-impliment using list of lines instead
                 wlOIII = 1665*(1+z)
@@ -826,12 +840,16 @@ class App(QtGui.QMainWindow):
                 c = 3e5 #km/s
                 v = c*(wl-wlCIV)/wlCIV
                 CIVMask = (v > -1000) & (v < 400)
+                SiIIMask = (c*(wl-wlSiII)/wlSiII > -400) & (c*(wl-wlSiII)/wlSiII < 400)
+                OISiIIMask = (c*(wl-wlOISiII)/wlOISiII > -400) & (c*(wl-wlOISiII)/wlOISiII < 400)
+                CIIMask = (c*(wl-wlCII)/wlCII > -400) & (c*(wl-wlCII)/wlCII < 400)
+                SiIVMask = (c*(wl-wlSiIV)/wlSiIV > -400) & (c*(wl-wlSiIV)/wlSiIV < 400)
                 HeIIMask = (c*(wl-wlHeII)/wlHeII > -400) & (c*(wl-wlHeII)/wlHeII < 400)
                 OIIIMask = (c*(wl-wlOIII)/wlOIII > -400) & (c*(wl-wlOIII)/wlOIII < 400)
                 CIIIMask = (c*(wl-wlCIII)/wlCIII > -400) & (c*(wl-wlCIII)/wlCIII < 400)
                 #add1 = (wl > 4819) & (wl < 4981)
                 #add2 = (wl > 5162) & (wl < 5305)
-                TotMask = CIVMask | HeIIMask | OIIIMask | CIIIMask #| add1 | add2
+                TotMask = CIVMask | HeIIMask | OIIIMask | CIIIMask | SiIIMask | OISiIIMask | CIIMask | SiIVMask#| add1 | add2
                 x = wl[TotMask]
                 y = flux[TotMask]
                 CIVscatter = pg.ScatterPlotItem(x=x,y=y,pen=pg.mkPen('g'),brush=pg.mkBrush('g'))
@@ -1311,6 +1329,25 @@ class App(QtGui.QMainWindow):
             self.lines.append(Iline)
             Iline.setPos(S)
         self.plt[dat_choice].addLegend()
+    #TODO: generalize, currently constructed for pypeit 1.3.3
+    def coadd_1d(self,files):
+        hdul = []
+        for f in files:
+            hdul.append(fits.open(f))
+        resdata = []
+        new_grid = np.arange(3000,6000,2.18)
+        for h in hdul:
+            data = h[1].data
+            resdata.append(spectres(new_grid,data['wave'],data['flux'],1/np.sqrt(data['ivar'])))
+        new_data = np.rec.array([np.mean(resdata,axis=0)[0],np.sqrt(np.sum(np.square(resdata),axis=0)[1])/len(resdata),new_grid],
+                    formats='float32,float32,float32',names='flux,sig,wave')
+        bintable = fits.BinTableHDU(new_data)
+        name, ok = qt.QInputDialog.getText(self,"Filename","Name the fits file:")
+        if not(ok):
+            name = "basic"
+        bintable.writeto(name + ".fits")
+
+
 
     '''
     NOTE: This begins the 2D image utilities
@@ -1339,9 +1376,15 @@ class App(QtGui.QMainWindow):
     #TODO: Pypeit coadding that is useful does: (Science - skymodel)*np.sqrt(ivarmodel)*(mask == 0)
     def pyp_coadd(self,files):
         multi = []
+        choice, ok = qt.QInputDialog.getItem(self,"Which Detector?","choose a data set:",['1','2'],0,False)
+        choice = int(choice)
         for f in files:
             hdul = fits.open(f)
-            multi.append((hdul[1].data-hdul[3].data)*np.sqrt(hdul[5].data)*(hdul[9].data==0))
+            nums = np.array([1,3,5,9])
+            if (hdul[1].header['EXTNAME'].find('DET01') != -1) and (choice == 2):
+                nums += 12
+            multi.append((hdul[nums[0]].data-hdul[nums[1]].data)*np.sqrt(hdul[nums[2]].data)*(hdul[nums[3]].data==0))
+            #embed()
         data = np.mean(multi,axis=0)
         
         self.imv = pg.ImageView(view=pg.PlotItem())

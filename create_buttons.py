@@ -40,4 +40,5 @@ def buttons(self):
         self.r2D = qt.QPushButton("Close 2D", self)
         self.sm = qt.QPushButton("Smooth",self)
         self.pypeit = qt.QPushButton("Pypeit 2D",self)
+        self.coadd1d = qt.QPushButton("1d Coadd",self)
         return

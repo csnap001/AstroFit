@@ -39,5 +39,6 @@ def connect(self):
         self.dLines.clicked.connect(self.Remove_lines)
         self.r2D.clicked.connect(self.remove2D)
         self.sm.clicked.connect(self.start_smoothing)
-        self.pypeit.clicked.connect(self.openFileNamesDialog)
+        self.pypeit.clicked.connect(self.open_pyp)
+        self.coadd1d.clicked.connect(self.coadd)
         return
