@@ -270,9 +270,10 @@ class App(QtGui.QMainWindow):
         i = int(np.clip(i, 0, data.shape[0] - 1))
         j = int(np.clip(j, 0, data.shape[1] - 1))
         val = data[j, i]
+        wl = self.imv.tVals[j,i]
         ppos = self.imv.mapToParent(point.toPoint())
         x, y = ppos.x(), ppos.y()
-        self.plot2d.setTitle("pos: (%0.1f, %0.1f)  pixel: (%d, %d)  value: %g" % (x, y, i, j, val))
+        self.plot2d.setTitle(r"pixel: (%d, %d)  value: %g  $wl (\AA)$: (%0.1f)" % (i, j, val,wl))
 
     def smooth_update(self):
         data = self.memory[0]
@@ -1380,7 +1381,7 @@ class App(QtGui.QMainWindow):
         choice = int(choice)
         for f in files:
             hdul = fits.open(f)
-            nums = np.array([1,3,5,9])
+            nums = np.array([1,3,5,9,8])
             if (hdul[1].header['EXTNAME'].find('DET01') != -1) and (choice == 2):
                 nums += 12
             multi.append((hdul[nums[0]].data-hdul[nums[1]].data)*np.sqrt(hdul[nums[2]].data)*(hdul[nums[3]].data==0))
@@ -1393,9 +1394,24 @@ class App(QtGui.QMainWindow):
             qt.QMessageBox.about(self,"Error","Data has {0} but images require 2".format(data.ndim))
             self.imv.close()
             return
-        self.imv.setImage(data,levels=(-10,10))
+        self.imv.setImage(data,levels=(-10,10),xvals=hdul[nums[4]].data)
         self.imv.setCursor(QtCore.Qt.CrossCursor)
         self.isigprox = pg.SignalProxy(self.imv.scene.sigMouseMoved,rateLimit=60,slot=self.imageHoverEvent)
+
+    def save_coadd(self):
+        if self.imv:
+            data = self.imv.image
+            name, ok = qt.QInputDialog.getText(self,"Filename","Name the fits file:")
+            if not(ok):
+                return
+            dir_ = QtGui.QFileDialog.getExistingDirectory(self, 'Select a folder:', 'C:\\', QtGui.QFileDialog.ShowDirsOnly)
+            if len(dir_) == 0:
+                return
+            cwd = os.getcwd()
+            os.chdir(dir_)
+            img = fits.ImageHDU(data)
+            img.writeto(name,overwrite=True)
+
 
     def remove2D(self):
         #self.plot2d.close()

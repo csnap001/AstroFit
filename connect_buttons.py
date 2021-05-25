@@ -41,4 +41,5 @@ def connect(self):
         self.sm.clicked.connect(self.start_smoothing)
         self.pypeit.clicked.connect(self.open_pyp)
         self.coadd1d.clicked.connect(self.coadd)
+        self.s_coadd.clicked.connect(self.save_coadd)
         return

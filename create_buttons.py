@@ -41,4 +41,5 @@ def buttons(self):
         self.sm = qt.QPushButton("Smooth",self)
         self.pypeit = qt.QPushButton("Pypeit 2D",self)
         self.coadd1d = qt.QPushButton("1d Coadd",self)
+        self.s_coadd = qt.QPushButton("Save Coadd",self)
         return
