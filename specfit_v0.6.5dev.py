@@ -1017,6 +1017,10 @@ class App(QtGui.QMainWindow):
             vals = az.summary(self.arviz[choice],round_to=5,stat_funcs=[conf_low,conf_high])
             cwd = os.getcwd()
             os.chdir(dir_)
+            if os.path.exists(name+'.pkl'):
+                os.remove(name+'.pkl')
+            if os.path.exists(name+'.txt'):
+                os.remove(name+'.txt')
             with open(name+'.pkl','wb') as output:
                 pickle.dump(dat_to_save,output,pickle.HIGHEST_PROTOCOL)
             with open(name+'.txt','a') as output:
