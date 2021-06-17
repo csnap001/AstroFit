@@ -42,4 +42,6 @@ def connect(self):
         self.pypeit.clicked.connect(self.open_pyp)
         self.coadd1d.clicked.connect(self.coadd)
         self.s_coadd.clicked.connect(self.save_coadd)
+        self.croi.clicked.connect(self.makeROI)
+        self.extract1d.clicked.connect(self.Extract1d)
         return

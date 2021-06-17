@@ -40,3 +40,5 @@ def Lay(self):
         self.toolbar.addWidget(self.pypeit)
         self.toolbar.addWidget(self.coadd1d)
         self.toolbar.addWidget(self.s_coadd)
+        self.toolbar.addWidget(self.croi)
+        self.toolbar.addWidget(self.extract1d)

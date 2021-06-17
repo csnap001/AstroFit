@@ -45,6 +45,9 @@ function. example: Slide = Slider(lower_bound,Upper_bound), Slide.valueChanged.c
 TODO: Add in ability to remove various added plotItems (i.e. fits and whatnot), there exists a 
 removeItem(item) function
 
+TODO: Grab names from table (all keywords) and allow user to select and then move view to there
+and highlight
+
 Module for GUI spectroscopic fitting environment based on pymc3
 and astropy. (Possibly, desired) This module will also have basic image arithmatic capabilities.
 
@@ -55,7 +58,8 @@ Class Functions:
 """
 
 import PyQt5.QtWidgets as qt
-from astropy.io.fits.hdu.table import BinTableHDU
+from astropy.io.fits.hdu.image import ImageHDU
+from astropy.io.fits.hdu.table import BinTableHDU, TableHDU
 from pyqtgraph.Qt import QtCore,QtGui
 import pyqtgraph as pg
 import pandas as pd
@@ -77,6 +81,7 @@ import matplotlib.pyplot as plt
 from functools import partial
 import os
 import scipy as sc
+from scipy.optimize import curve_fit
 from IPython import embed
 from astropy import cosmology
 import pickle
@@ -1383,14 +1388,33 @@ class App(QtGui.QMainWindow):
         multi = []
         choice, ok = qt.QInputDialog.getItem(self,"Which Detector?","choose a data set:",['1','2'],0,False)
         choice = int(choice)
+        ID = []
+        Intrument = []
         for f in files:
             hdul = fits.open(f)
+            hdr = hdul[0].header
             nums = np.array([1,3,5,9,8])
             if (hdul[1].header['EXTNAME'].find('DET01') != -1) and (choice == 2):
                 nums += 12
             multi.append((hdul[nums[0]].data-hdul[nums[1]].data)*np.sqrt(hdul[nums[2]].data)*(hdul[nums[3]].data==0))
             #embed()
-        data = np.mean(multi,axis=0)
+            try:
+                ID.append(hdr['FRAMEID'])
+                Intrument.append(hdr['INSTRUME'])
+            except:
+                pass
+        #TODO: how to check if mosfire? shift using scipy.ndimage.shift(image,shift,cval=0.0). 
+        #How to check if B image? INSTRUME: gives intrument name. FRAMEID: gives whether A or B
+        for e,I in enumerate(Intrument):
+            if I == "MOSFIRE":
+                if ID[e] == "B":
+                    multi[e] = sc.ndimage.shift(multi[e],np.array([0,-14]))
+                else:
+                    pass
+        if np.any(Intrument == "MOSFIRE"):
+            data = np.medain(multi,axis=0)
+        else:        
+            data = np.mean(multi,axis=0)
         
         self.imv = pg.ImageView(view=pg.PlotItem())
         self.plot2d.addWidget(self.imv)
@@ -1398,13 +1422,18 @@ class App(QtGui.QMainWindow):
             qt.QMessageBox.about(self,"Error","Data has {0} but images require 2".format(data.ndim))
             self.imv.close()
             return
-        self.imv.setImage(data,levels=(-10,10),xvals=hdul[nums[4]].data)
+        self.imv.setImage(data,levels=(-10,10),xvals=hdul[nums[4]].data)#xvals sets the wavelengths, later grabbed as self.imv.tVals
         self.imv.setCursor(QtCore.Qt.CrossCursor)
         self.isigprox = pg.SignalProxy(self.imv.scene.sigMouseMoved,rateLimit=60,slot=self.imageHoverEvent)
 
     def save_coadd(self):
         if self.imv:
             data = self.imv.image
+            try:
+                wl = self.imv.tVals
+                tabhdu = fits.ImageHDU(wl)
+            except:
+                pass
             name, ok = qt.QInputDialog.getText(self,"Filename","Name the fits file:")
             if not(ok):
                 return
@@ -1414,11 +1443,29 @@ class App(QtGui.QMainWindow):
             cwd = os.getcwd()
             os.chdir(dir_)
             img = fits.ImageHDU(data)
-            img.writeto(name,overwrite=True)
+            prim = fits.PrimaryHDU()
+            primhead = prim.header
+            primhead['EXTEND'] = True
+            new_hdul = fits.HDUList([prim,img,tabhdu])
+            new_hdul.writeto(name,overwrite=True)
 
+    def Extract1d(self):
+        data = self.roi.getArrayRegion(self.imv.image,self.imv.imageItem,axes=(0,1))
+        wlarr = self.roi.getArrayRegion(self.imv.tVals,self.imv.imageItem,axes=(0,1))
+        p,pcov = curve_fit(gauss0,np.arange(len(data[0])),np.sum(data,axis=0),(np.max(np.sum(data,axis=0)),np.where(np.sum(data,axis=0)==np.max(np.sum(data,axis=0)))[0][0],1))
+        lower = int(p[1] - 3*p[2])
+        upper = int(p[1]+3*p[2])
+        spec = data[:,lower:upper]
+        flux = np.sum(spec,axis=1)
+        wl = wlarr[:,int(np.floor(p[1]))]
+        hdu = ImageHDU([flux,wl])
+        hdu.writeto("spec1d.fits",overwrite=True)
+
+    def makeROI(self):
+        self.roi = pg.RectROI([10,50],20,pen='r')
+        self.imv.addItem(self.roi)
 
     def remove2D(self):
-        #self.plot2d.close()
         self.imv.close()
 
     def show_2d_fits(self,fileName = ""):
@@ -1442,10 +1489,10 @@ class App(QtGui.QMainWindow):
         self.imv = pg.ImageView(view=pg.PlotItem())
         self.plot2d.addWidget(self.imv)
         if data.ndim != 2:
-            qt.QMessageBox.about(self,"Error","Data has {0} but images require 2".format(data.ndim))
+            qt.QMessageBox.about(self,"Error","Data has {0} dimensions but images require 2 dimensions".format(data.ndim))
             self.imv.close()
             return
-        self.imv.setImage(data)
+        self.imv.setImage(data,levels=(-10,10))
         self.imv.setCursor(QtCore.Qt.CrossCursor)
         self.isigprox = pg.SignalProxy(self.imv.scene.sigMouseMoved,rateLimit=60,slot=self.imageHoverEvent)
     
