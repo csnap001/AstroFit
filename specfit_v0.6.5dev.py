@@ -1390,6 +1390,7 @@ class App(QtGui.QMainWindow):
         choice = int(choice)
         ID = []
         Intrument = []
+        err = []
         for f in files:
             hdul = fits.open(f)
             hdr = hdul[0].header
@@ -1397,6 +1398,7 @@ class App(QtGui.QMainWindow):
             if (hdul[1].header['EXTNAME'].find('DET01') != -1) and (choice == 2):
                 nums += 12
             multi.append((hdul[nums[0]].data-hdul[nums[1]].data)*np.sqrt(hdul[nums[2]].data)*(hdul[nums[3]].data==0))
+            err.append(hdul[nums[2]].data)#inverse variance
             #embed()
             try:
                 ID.append(hdr['FRAMEID'])
@@ -1409,13 +1411,20 @@ class App(QtGui.QMainWindow):
             if I == "MOSFIRE":
                 if ID[e] == "B":
                     multi[e] = sc.ndimage.shift(multi[e],np.array([0,-14]))
+                    err[e] = sc.ndimage.shift(err[e],np.array([0,-14]))
                 else:
                     pass
+
+        Intrument = np.array(Intrument)
+        multi = np.array(multi)
+        err = np.array(err)
         if np.any(Intrument == "MOSFIRE"):
-            data = np.medain(multi,axis=0)
+            data = np.median(multi,axis=0)
+            merr = np.sqrt((np.sum(err*multi**2,axis=0)/np.sum(err,axis=0) - (np.sum(err*multi,axis=0)/np.sum(err,axis=0))**2)/(len(multi)-1))*np.sqrt(np.pi*(2*len(multi)-1)/(4*len(multi)-4))
         else:        
-            data = np.mean(multi,axis=0)
-        
+            data = np.average(multi,axis=0,weights=err)#divide by zero, but not a problem if np.sum(x*w)/np.sum(w)?
+            merr = np.sqrt((np.sum(err*multi**2,axis=0)/np.sum(err,axis=0) - (np.sum(err*multi,axis=0)/np.sum(err,axis=0))**2)/(len(multi)-1))
+        merr[np.isnan(merr)] = 1000
         self.imv = pg.ImageView(view=pg.PlotItem())
         self.plot2d.addWidget(self.imv)
         if data.ndim != 2:
@@ -1425,6 +1434,7 @@ class App(QtGui.QMainWindow):
         self.imv.setImage(data,levels=(-10,10),xvals=hdul[nums[4]].data)#xvals sets the wavelengths, later grabbed as self.imv.tVals
         self.imv.setCursor(QtCore.Qt.CrossCursor)
         self.isigprox = pg.SignalProxy(self.imv.scene.sigMouseMoved,rateLimit=60,slot=self.imageHoverEvent)
+        self.err2d = merr
 
     def save_coadd(self):
         if self.imv:
@@ -1452,14 +1462,19 @@ class App(QtGui.QMainWindow):
     def Extract1d(self):
         data = self.roi.getArrayRegion(self.imv.image,self.imv.imageItem,axes=(0,1))
         wlarr = self.roi.getArrayRegion(self.imv.tVals,self.imv.imageItem,axes=(0,1))
+        err = self.roi.getArrayRegion(self.err2d,self.imv.imageItem,axes=(0,1))
         p,pcov = curve_fit(gauss0,np.arange(len(data[0])),np.sum(data,axis=0),(np.max(np.sum(data,axis=0)),np.where(np.sum(data,axis=0)==np.max(np.sum(data,axis=0)))[0][0],1))
         lower = int(p[1] - 3*p[2])
         upper = int(p[1]+3*p[2])
         spec = data[:,lower:upper]
+        err1d = err[:,lower:upper]
         flux = np.sum(spec,axis=1)
+        ferr = np.sqrt(np.sum(err1d**2,axis=1))
         wl = wlarr[:,int(np.floor(p[1]))]
-        hdu = ImageHDU([flux,wl])
-        hdu.writeto("spec1d.fits",overwrite=True)
+        new_data = np.rec.array([flux,ferr,wl],
+                    formats='float32,float32,float32',names='flux,sig,wave')
+        bintable = fits.BinTableHDU(new_data)
+        bintable.writeto("spec1d.fits",overwrite=True)
 
     def makeROI(self):
         self.roi = pg.RectROI([10,50],20,pen='r')
