@@ -1349,20 +1349,28 @@ class App(QtGui.QMainWindow):
         for h in hdul:
             data = h[1].data
             resdata.append(spectres(new_grid,data['wave'],data['flux'],1/np.sqrt(data['ivar'])))
-        new_data = np.rec.array([np.mean(resdata,axis=0)[0],np.sqrt(np.sum(np.square(resdata),axis=0)[1])/len(resdata),new_grid],
+
+        ivar_new = np.array([i[1] for i in resdata])
+        ivar_new = 1/np.square(ivar_new)
+        flux_new = np.array([i[0] for i in resdata])
+        new_data = np.rec.array([np.sum(flux_new*ivar_new,axis=0)/np.sum(ivar_new,axis=0),np.sqrt(1/np.sum(ivar_new,axis=0)),new_grid],
                     formats='float32,float32,float32',names='flux,sig,wave')
         bintable = fits.BinTableHDU(new_data)
         name, ok = qt.QInputDialog.getText(self,"Filename","Name the fits file:")
+        dir_ = QtGui.QFileDialog.getExistingDirectory(self, 'Select a folder:', 'C:\\', QtGui.QFileDialog.ShowDirsOnly)
+        if len(dir_) == 0:
+            return
+        cwd = os.getcwd()
+        os.chdir(dir_)        
         if not(ok):
             name = "basic"
         bintable.writeto(name + ".fits")
+        os.chdir(cwd)        
 
 
 
     '''
     NOTE: This begins the 2D image utilities
-    currently these are broken and require setup
-    Not particularly concerned with this currently
     '''
     #TODO: likely "easy" to setup w/ photutils
     #amazing examples of analysis tools with pyqtgraph
@@ -1458,6 +1466,7 @@ class App(QtGui.QMainWindow):
             primhead['EXTEND'] = True
             new_hdul = fits.HDUList([prim,img,tabhdu])
             new_hdul.writeto(name,overwrite=True)
+            os.chdir(cwd)
 
     def Extract1d(self):
         data = self.roi.getArrayRegion(self.imv.image,self.imv.imageItem,axes=(0,1))
@@ -1474,7 +1483,13 @@ class App(QtGui.QMainWindow):
         new_data = np.rec.array([flux,ferr,wl],
                     formats='float32,float32,float32',names='flux,sig,wave')
         bintable = fits.BinTableHDU(new_data)
+        dir_ = QtGui.QFileDialog.getExistingDirectory(self, 'Select a folder:', 'C:\\', QtGui.QFileDialog.ShowDirsOnly)
+        if len(dir_) == 0:
+            return
+        cwd = os.getcwd()
+        os.chdir(dir_) 
         bintable.writeto("spec1d.fits",overwrite=True)
+        os.chdir(cwd)
 
     def makeROI(self):
         self.roi = pg.RectROI([10,50],20,pen='r')
