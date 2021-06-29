@@ -57,6 +57,7 @@ Class Functions:
 
 """
 
+import hashlib
 import PyQt5.QtWidgets as qt
 from astropy.io.fits.hdu.image import ImageHDU
 from astropy.io.fits.hdu.table import BinTableHDU, TableHDU
@@ -84,6 +85,7 @@ import scipy as sc
 from scipy.optimize import curve_fit
 from IPython import embed
 from astropy import cosmology
+from astropy.modeling.functional_models import Voigt1D
 import pickle
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication, QHBoxLayout, QLabel, QSizePolicy, QSlider, QSpacerItem, \
@@ -131,6 +133,18 @@ def Pow(x,f0,a0,cent):
 
 def gauss0(x,A0,x0,b0):
     return abs(A0)*np.exp(-(((x-x0)/b0)**2.))
+
+def Voigt(x,A0,Nl,x0,sig):
+    return abs(A0)*np.exp(-0.7580*(Nl/10e13)*(10/sig)*gauss0(3e5*(x-x0)/x0,1,0,sig))
+
+def lorentzian(x,x0,a,gam):
+    return abs(a)*gam**2/(gam**2 + (x-x0)**2)
+
+def hailmary(x,x0,a,b,tau):
+    return (a*(x/x0) + b)*np.exp(-(x-x0)**2/tau)
+
+def VGpow(x,Av,Ag,Ac,xg,xc,p,sig,b,tau):
+    return Powpgauss(x,Ag,xg,sig,Ac,p,xc) + hailmary(x,xc,Av,b,tau)
 
 def linear(x,a,b):
     return a*x + b
@@ -796,7 +810,14 @@ class App(QtGui.QMainWindow):
             ampB = (0,4*peakFl)
             ampB = (ampB[0],ampB[1][0])#same as z
             #embed()
-            self.Fitter(Powpgauss,data,flux[mask],err[mask],finalwl,[ampB,zB,sigB,(0,np.max(flux[mask])),(-5,5),(lr[0],lr[1])],name='EW',plt_name=dat_choice)
+            items = ('Gauss','Voigt')
+            func, ok = qt.QInputDialog.getItem(self,"Get function","Function: ",items,0,False)
+            if func == 'Gauss':
+                self.Fitter(Powpgauss,data,flux[mask],err[mask],finalwl,[ampB,zB,sigB,(0,np.max(flux[mask])),(-5,5),(lr[0],lr[1])],name='EW',plt_name=dat_choice)
+            elif func == 'Voigt':
+                gvamp = (0,np.max(flux[mask]))
+                gtau = np.array(zB) + 200
+                self.Fitter(VGpow,data,flux[mask],err[mask],finalwl,[ampB,zB,sigB,(0,np.max(flux[mask])),(-5,5),(lr[0],lr[1]),gvamp,gvamp,gtau],name='Voigt',plt_name=dat_choice)
 
         else:
             qt.QMessageBox.about(self,"No data on screen","Not fitting")
@@ -947,6 +968,18 @@ class App(QtGui.QMainWindow):
                 #step = pm.HamiltonianMC()
 
                 mu = func(wl.astype(np.float32),amp,centroid,sigma,cont_amp,alpha,unity)
+            if name == "Voigt":
+                amp = pm.TruncatedNormal("amp",mu=(bounds[0][0]+bounds[0][1])/2,sigma=0.8*(bounds[0][1] - bounds[0][0]),testval=bounds[0][1]/2,lower=0)
+                centroid = pm.TruncatedNormal("centroid",mu=(bounds[1][0]+bounds[1][1])/2,sigma=0.8*(bounds[1][1] - bounds[1][0]),lower=bounds[1][0]-10,upper=bounds[1][1]+10)
+                sigma = pm.TruncatedNormal("sigma",mu=(bounds[2][0]+bounds[2][1])/2,sigma=0.4*(bounds[2][1] - bounds[2][0]),testval=(bounds[2][0]+bounds[2][1])/2,lower=0)
+                cont_amp = pm.TruncatedNormal("cont_amp",mu=(bounds[3][0]+bounds[3][1])/2,sigma=0.8*(bounds[3][1] - bounds[3][0]),testval=(bounds[3][0]+bounds[3][1])/2,lower=0.000001)
+                alpha = pm.TruncatedNormal("alpha",mu=(bounds[4][0]+bounds[4][1])/2,sigma=0.8*(bounds[4][1] - bounds[4][0]),testval=(bounds[4][0]+bounds[4][1])/2,lower=-5,upper=5)
+                unity = pm.TruncatedNormal("unity",mu=(bounds[5][0]+bounds[5][1])/2,sigma=0.2*(bounds[5][1] - bounds[5][0]),testval=(bounds[5][0]+bounds[5][1])/2,lower=leftun,upper=rghtun)
+                Va = pm.TruncatedNormal("Va",mu=(bounds[6][0]+bounds[6][1])/2,sigma=0.8*(bounds[6][1] - bounds[6][0]),lower=0)
+                Vb = pm.Normal("Vb",mu=(bounds[7][0]+bounds[7][1])/2,sigma=0.8*(bounds[7][1] - bounds[7][0]))
+                tau = pm.Normal("tau",mu=(bounds[8][0]+bounds[8][1])/2,sigma=0.8*(bounds[8][1] - bounds[8][0]))
+                mu = func(wl.astype(np.float32),Va,amp,cont_amp,centroid,unity,alpha,sigma,Vb,tau)
+                
             '''    
             print(basic_model.test_point)
             print(basic_model.check_test_point())
@@ -962,17 +995,21 @@ class App(QtGui.QMainWindow):
             #Likelihood of sampling distribution
             Y_obs = pm.Normal("Y_obs",mu=mu,sigma=err.astype(np.float32),observed=flux.astype(np.float32))
             
-            #trace = pm.sample(20000,tune=5000,cores=6,init='adapt_diag',step=pm.step_methods.Metropolis())#used for testing parameter space
+            trace = pm.sample(20000,tune=5000,cores=6,init='adapt_diag',step=pm.step_methods.Metropolis())#used for testing parameter space
+            '''
             cores = multi.cpu_count()
             if cores >= 10:
                 trace = pm.sample(10000,tune=5000,target_accept=0.8,cores=10)
             else:
                 trace = pm.sample(10000,tune=5000,target_accept=0.8,cores=cores)#TODO: might be overworking computers here
+            '''
             #NOTE: vals['mean'].keys() gives the parameter names
             if cname == "Power Law":
                 vals = az.summary(trace,round_to=10,var_names=['amp','alpha','unity'])
             elif name == "EW":
                 vals = az.summary(trace,round_to=10,var_names=['amp','centroid','sigma','cont_amp','alpha','unity'])
+            elif name == "Voigt":
+                vals = az.summary(trace,round_to=10,var_names=['Va','amp','cont_amp','centroid','unity','alpha','sigma','Vb','tau'])
             samples = pm.trace_to_dataframe(trace,varnames=vals['mean'].keys())
 
         if name == 'continuum':
@@ -996,6 +1033,17 @@ class App(QtGui.QMainWindow):
             pen = (0,100,0)
             cont = 1.0
             #This is used for GUI image such that we can see the fit 
+        if name == "Voigt":
+            self.ewfit.append(vals['mean'])
+            name += self.names1d[plt_name]
+            if name in self.pdfs.keys():
+                name += ".1"
+            self.pdfs[name] = (samples,vals['mean'])
+            ewPdf = np.sqrt(2*np.pi)*np.array(samples['amp'])*np.array(samples['sigma'])/(Pow(vals['mean']['centroid'],samples['cont_amp'],samples['alpha'],samples['unity'])+hailmary(vals['mean']['centroid'],samples['centroid'],samples['Va'],samples['Vb'],samples['tau']))
+            ewMeas = np.sqrt(2*np.pi)*np.array(samples['amp'])*np.array(samples['sigma'])/(Pow(vals['mean']['centroid'],samples['cont_amp'],samples['alpha'],samples['unity'])+hailmary(vals['mean']['centroid'],vals['mean']['centroid'],vals['mean']['Va'],vals['mean']['Vb'],vals['mean']['tau']))
+            self.pdfs['EWPDF'] = [ewPdf,pd.core.series.Series([ewMeas],index=["EW"])]
+            pen = (0,100,0)
+            cont = 1.0
         self.arviz[name] = trace 
         self.plt[plt_name].plot(data[0].getData()[0],cont*func(data[0].getData()[0],*vals['mean']),pen=pen)
         del(basic_model)
@@ -1429,9 +1477,13 @@ class App(QtGui.QMainWindow):
         if np.any(Intrument == "MOSFIRE"):
             data = np.median(multi,axis=0)
             merr = np.sqrt((np.sum(err*multi**2,axis=0)/np.sum(err,axis=0) - (np.sum(err*multi,axis=0)/np.sum(err,axis=0))**2)/(len(multi)-1))*np.sqrt(np.pi*(2*len(multi)-1)/(4*len(multi)-4))
-        else:        
+        else: 
+            '''       
             data = np.average(multi,axis=0,weights=err)#divide by zero, but not a problem if np.sum(x*w)/np.sum(w)?
             merr = np.sqrt((np.sum(err*multi**2,axis=0)/np.sum(err,axis=0) - (np.sum(err*multi,axis=0)/np.sum(err,axis=0))**2)/(len(multi)-1))
+            '''
+            data = np.median(multi,axis=0)
+            merr = np.sqrt((np.sum(err*multi**2,axis=0)/np.sum(err,axis=0) - (np.sum(err*multi,axis=0)/np.sum(err,axis=0))**2)/(len(multi)-1))*np.sqrt(np.pi*(2*len(multi)-1)/(4*len(multi)-4))
         merr[np.isnan(merr)] = 1000
         self.imv = pg.ImageView(view=pg.PlotItem())
         self.plot2d.addWidget(self.imv)
