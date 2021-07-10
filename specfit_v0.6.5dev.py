@@ -61,6 +61,7 @@ import hashlib
 import PyQt5.QtWidgets as qt
 from astropy.io.fits.hdu.image import ImageHDU
 from astropy.io.fits.hdu.table import BinTableHDU, TableHDU
+from numpy.lib.polynomial import poly
 from pyqtgraph.Qt import QtCore,QtGui
 import pyqtgraph as pg
 import pandas as pd
@@ -72,6 +73,8 @@ from pyqtgraph.dockarea import *
 import multiprocessing as multi
 import numpy as np
 import sys
+
+from theano.tensor.sharedvar import TensorSharedVariable
 import create_buttons as cb
 import connect_buttons as conb
 from Layouts import Lay
@@ -92,6 +95,9 @@ from PyQt5.QtWidgets import QApplication, QHBoxLayout, QLabel, QSizePolicy, QSli
     QVBoxLayout, QWidget, QToolBar
 from scipy.ndimage import gaussian_filter1d
 from spectres import spectres
+import theano.tensor as t
+import theano
+from multipledispatch import dispatch
 
 def conf_low(data,half=0.34):
     mean = np.mean(data)
@@ -133,6 +139,36 @@ def Pow(x,f0,a0,cent):
 
 def gauss0(x,A0,x0,b0):
     return abs(A0)*np.exp(-(((x-x0)/b0)**2.))
+
+def polygauss(x,Ag,xg,bg,b,m):
+    return polynomial(x,b,m) + gauss0(x,Ag,xg,bg)
+
+@theano.compile.ops.as_op(itypes=[t.dvector, t.dscalar,t.dscalar, t.dscalar,t.dscalar, t.dscalar,t.dscalar, t.dscalar,t.dscalar, t.dscalar],otypes=[t.dvector])
+@dispatch(object,object,object,object,object,object,object,object,object,object)
+def piecewise(x,xb,xc,xg,A0,Ag,a,bg,b,m):
+    #y = t.zeros(x.shape)
+    #params = t.switch(x <= xb,[Ag,xg,bg,b,m],[A0,xc,a])
+    #func = t.switch(x <= xb,polygauss,Pow)
+    #y = t.switch(x <= xb,polynomial(x,b,m) + gauss0(x,Ag,xg,bg),Pow(x,A0,xc,a))
+    return pm.math.switch(x <= xb,polygauss(x,Ag,xg,bg,b,m),Pow(x,A0,a,xc))
+
+@dispatch(np.ndarray,float,float,float,float,float,float,float,float,float)
+def piecewise(x,xb,xc,xg,A0,Ag,a,bg,b,m):
+    print("numpy array")
+    y = np.zeros_like(x)
+    mask = x <= xb
+    y[mask] = polygauss(x[mask],Ag,xg,bg,b,m)
+    y[~mask] = Pow(x[~mask],A0,xc,a)
+    return y
+
+@dispatch(float,float,float,float,float,float,float,float,float,float)
+def piecewise(x,xb,xc,xg,A0,Ag,a,bg,b,m):
+    print("All floats")
+    y = np.zeros_like(x)
+    mask = x <= xb
+    y[mask] = polygauss(x[mask],Ag,xg,bg,b,m)
+    y[~mask] = Pow(x[~mask],A0,xc,a)
+    return y
 
 def Voigt(x,A0,Nl,x0,sig):
     return abs(A0)*np.exp(-0.7580*(Nl/10e13)*(10/sig)*gauss0(3e5*(x-x0)/x0,1,0,sig))
@@ -817,8 +853,7 @@ class App(QtGui.QMainWindow):
             elif func == 'Voigt':
                 gvamp = (0,np.max(flux[mask]))
                 gtau = np.array(zB) + 200
-                self.Fitter(VGpow,data,flux[mask],err[mask],finalwl,[ampB,zB,sigB,(0,np.max(flux[mask])),(-5,5),(lr[0],lr[1]),gvamp,gvamp,gtau],name='Voigt',plt_name=dat_choice)
-
+                self.Fitter(piecewise,data,flux[mask],err[mask],finalwl,[(lr[0]+100,lr[0]+200),(lr[0],lr[1]),zB,(0,np.max(flux[mask])),ampB,(-5,5),sigB,(-1000,1000),(np.min(flux[mask])/np.max(finalwl),np.max(flux[mask])/np.min(finalwl))],name='Voigt',plt_name=dat_choice)
         else:
             qt.QMessageBox.about(self,"No data on screen","Not fitting")
                         
@@ -969,16 +1004,17 @@ class App(QtGui.QMainWindow):
 
                 mu = func(wl.astype(np.float32),amp,centroid,sigma,cont_amp,alpha,unity)
             if name == "Voigt":
-                amp = pm.TruncatedNormal("amp",mu=(bounds[0][0]+bounds[0][1])/2,sigma=0.8*(bounds[0][1] - bounds[0][0]),testval=bounds[0][1]/2,lower=0)
-                centroid = pm.TruncatedNormal("centroid",mu=(bounds[1][0]+bounds[1][1])/2,sigma=0.8*(bounds[1][1] - bounds[1][0]),lower=bounds[1][0]-10,upper=bounds[1][1]+10)
-                sigma = pm.TruncatedNormal("sigma",mu=(bounds[2][0]+bounds[2][1])/2,sigma=0.4*(bounds[2][1] - bounds[2][0]),testval=(bounds[2][0]+bounds[2][1])/2,lower=0)
+                switch = pm.TruncatedNormal("switch",mu=(bounds[0][0]+bounds[0][1])/2,sigma=0.8*(bounds[0][1] - bounds[0][0]),testval=(bounds[0][0]+bounds[0][1])/2,lower=bounds[0][0])
+                unity = pm.TruncatedNormal("unity",mu=(bounds[1][0]+bounds[1][1])/2,sigma=0.2*(bounds[1][1] - bounds[1][0]),testval=(bounds[1][0]+bounds[1][1])/2,lower=leftun,upper=rghtun)
+                centroid = pm.TruncatedNormal("centroid",mu=(bounds[2][0]+bounds[2][1])/2,sigma=0.8*(bounds[2][1] - bounds[2][0]),lower=bounds[2][0]-10,upper=bounds[2][1]+10)
                 cont_amp = pm.TruncatedNormal("cont_amp",mu=(bounds[3][0]+bounds[3][1])/2,sigma=0.8*(bounds[3][1] - bounds[3][0]),testval=(bounds[3][0]+bounds[3][1])/2,lower=0.000001)
-                alpha = pm.TruncatedNormal("alpha",mu=(bounds[4][0]+bounds[4][1])/2,sigma=0.8*(bounds[4][1] - bounds[4][0]),testval=(bounds[4][0]+bounds[4][1])/2,lower=-5,upper=5)
-                unity = pm.TruncatedNormal("unity",mu=(bounds[5][0]+bounds[5][1])/2,sigma=0.2*(bounds[5][1] - bounds[5][0]),testval=(bounds[5][0]+bounds[5][1])/2,lower=leftun,upper=rghtun)
-                Va = pm.TruncatedNormal("Va",mu=(bounds[6][0]+bounds[6][1])/2,sigma=0.8*(bounds[6][1] - bounds[6][0]),lower=0)
-                Vb = pm.Normal("Vb",mu=(bounds[7][0]+bounds[7][1])/2,sigma=0.8*(bounds[7][1] - bounds[7][0]))
-                tau = pm.Normal("tau",mu=(bounds[8][0]+bounds[8][1])/2,sigma=0.8*(bounds[8][1] - bounds[8][0]))
-                mu = func(wl.astype(np.float32),Va,amp,cont_amp,centroid,unity,alpha,sigma,Vb,tau)
+                amp = pm.TruncatedNormal("amp",mu=(bounds[4][0]+bounds[4][1])/2,sigma=0.8*(bounds[4][1] - bounds[4][0]),testval=(bounds[4][0]+bounds[4][1])/2,lower=0)
+                alpha = pm.TruncatedNormal("alpha",mu=(bounds[5][0]+bounds[5][1])/2,sigma=0.8*(bounds[5][1] - bounds[5][0]),testval=(bounds[5][0]+bounds[5][1])/2,lower=-5,upper=5)
+                sigma = pm.TruncatedNormal("sigma",mu=(bounds[6][0]+bounds[6][1])/2,sigma=0.4*(bounds[6][1] - bounds[6][0]),testval=(bounds[6][0]+bounds[6][1])/2,lower=0)
+                b = pm.Normal("b",mu=(bounds[7][0]+bounds[7][1])/2,sigma=0.4*(bounds[7][1] - bounds[7][0]),testval=(bounds[7][0]+bounds[7][1])/2)
+                m = pm.Normal("m",mu=(bounds[8][0]+bounds[8][1])/2,sigma=0.4*(bounds[8][1] - bounds[8][0]),testval=(bounds[8][0]+bounds[8][1])/2)
+                mu = func(wl,switch,unity,centroid,cont_amp,amp,alpha,sigma,b,m)
+                #mu = pm.math.switch(wl <= switch,polygauss(wl,amp,centroid,sigma,b,m),Pow(wl,cont_amp,alpha,unity))
                 
             '''    
             print(basic_model.test_point)
@@ -1009,7 +1045,7 @@ class App(QtGui.QMainWindow):
             elif name == "EW":
                 vals = az.summary(trace,round_to=10,var_names=['amp','centroid','sigma','cont_amp','alpha','unity'])
             elif name == "Voigt":
-                vals = az.summary(trace,round_to=10,var_names=['Va','amp','cont_amp','centroid','unity','alpha','sigma','Vb','tau'])
+                vals = az.summary(trace,round_to=10,var_names=['switch','unity','centroid','cont_amp','amp','alpha','sigma','b','m'])
             samples = pm.trace_to_dataframe(trace,varnames=vals['mean'].keys())
 
         if name == 'continuum':
@@ -1039,11 +1075,12 @@ class App(QtGui.QMainWindow):
             if name in self.pdfs.keys():
                 name += ".1"
             self.pdfs[name] = (samples,vals['mean'])
-            ewPdf = np.sqrt(2*np.pi)*np.array(samples['amp'])*np.array(samples['sigma'])/(Pow(vals['mean']['centroid'],samples['cont_amp'],samples['alpha'],samples['unity'])+hailmary(vals['mean']['centroid'],samples['centroid'],samples['Va'],samples['Vb'],samples['tau']))
-            ewMeas = np.sqrt(2*np.pi)*np.array(samples['amp'])*np.array(samples['sigma'])/(Pow(vals['mean']['centroid'],samples['cont_amp'],samples['alpha'],samples['unity'])+hailmary(vals['mean']['centroid'],vals['mean']['centroid'],vals['mean']['Va'],vals['mean']['Vb'],vals['mean']['tau']))
+            ewPdf = np.sqrt(2*np.pi)*np.array(samples['amp'])*np.array(samples['sigma'])/(Pow(vals['mean']['centroid'],samples['cont_amp'],samples['alpha'],samples['unity'])+polynomial(vals['mean']['centroid'],samples['b'],samples['m']))
+            ewMeas = np.sqrt(2*np.pi)*np.array(samples['amp'])*np.array(samples['sigma'])/(Pow(vals['mean']['centroid'],samples['cont_amp'],samples['alpha'],samples['unity'])+polynomial(vals['mean']['centroid'],vals['mean']['b'],vals['mean']['m']))
             self.pdfs['EWPDF'] = [ewPdf,pd.core.series.Series([ewMeas],index=["EW"])]
             pen = (0,100,0)
             cont = 1.0
+            #TODO: plotting of function failing, unsure why. Also EW not being plotted because name doesn't include "EW"
         self.arviz[name] = trace 
         self.plt[plt_name].plot(data[0].getData()[0],cont*func(data[0].getData()[0],*vals['mean']),pen=pen)
         del(basic_model)
