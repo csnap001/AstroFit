@@ -158,7 +158,7 @@ def piecewise(x,xb,xc,xg,A0,Ag,a,bg,b,m):
     y = np.zeros_like(x)
     mask = x <= xb
     y[mask] = polygauss(x[mask],Ag,xg,bg,b,m)
-    y[~mask] = Pow(x[~mask],A0,xc,a)
+    y[~mask] = Pow(x[~mask],A0,a,xc)
     return y
 
 @dispatch(float,float,float,float,float,float,float,float,float,float)
@@ -268,6 +268,9 @@ class App(QtGui.QMainWindow):
 
         self.toolbar = QToolBar("Spec Tools")
         self.addToolBar(self.toolbar)
+        #Other tools
+        self.sampler = qt.QComboBox(self)
+        self.sampler.addItems([ 'NUTS', 'Metropolis', 'Slice', 'HamiltonianMC', 'BinaryMetropolis'])
         #Creating buttons
         cb.buttons(self)
         #Connecting buttons to functions
@@ -1030,15 +1033,17 @@ class App(QtGui.QMainWindow):
             #embed()
             #Likelihood of sampling distribution
             Y_obs = pm.Normal("Y_obs",mu=mu,sigma=err.astype(np.float32),observed=flux.astype(np.float32))
-            
-            trace = pm.sample(20000,tune=5000,cores=6,init='adapt_diag',step=pm.step_methods.Metropolis())#used for testing parameter space
-            '''
+            step = self.sampler.currentText()
             cores = multi.cpu_count()
-            if cores >= 10:
-                trace = pm.sample(10000,tune=5000,target_accept=0.8,cores=10)
+            if step == 'Metropolis':
+                trace = pm.sample(10000,tune=5000,cores=10,init='adapt_diag',step=pm.step_methods.Metropolis())#used for testing parameter space
+            elif (cores >= 10) and (step == 'NUTS'):
+                trace = pm.sample(10000,tune=5000,target_accept=0.8,cores=10,init='adapt_diag')
+            elif step == 'NUTS':
+                trace = pm.sample(10000,tune=5000,target_accept=0.8,cores=cores,init='adapt_diag')#TODO: might be overworking computers here
             else:
-                trace = pm.sample(10000,tune=5000,target_accept=0.8,cores=cores)#TODO: might be overworking computers here
-            '''
+                qt.QMessageBox.about(self,"Not supported","sampling method {} is not yet supported. Exiting without fit.".format(step))
+                return
             #NOTE: vals['mean'].keys() gives the parameter names
             if cname == "Power Law":
                 vals = az.summary(trace,round_to=10,var_names=['amp','alpha','unity'])
@@ -1075,8 +1080,8 @@ class App(QtGui.QMainWindow):
             if name in self.pdfs.keys():
                 name += ".1"
             self.pdfs[name] = (samples,vals['mean'])
-            ewPdf = np.sqrt(2*np.pi)*np.array(samples['amp'])*np.array(samples['sigma'])/(Pow(vals['mean']['centroid'],samples['cont_amp'],samples['alpha'],samples['unity'])+polynomial(vals['mean']['centroid'],samples['b'],samples['m']))
-            ewMeas = np.sqrt(2*np.pi)*np.array(samples['amp'])*np.array(samples['sigma'])/(Pow(vals['mean']['centroid'],samples['cont_amp'],samples['alpha'],samples['unity'])+polynomial(vals['mean']['centroid'],vals['mean']['b'],vals['mean']['m']))
+            ewPdf = np.sqrt(2*np.pi)*np.array(samples['amp'])*np.array(samples['sigma'])/(polynomial(vals['mean']['centroid'],samples['b'],samples['m']))
+            ewMeas = np.sqrt(2*np.pi)*np.array(samples['amp'])*np.array(samples['sigma'])/(polynomial(vals['mean']['centroid'],vals['mean']['b'],vals['mean']['m']))
             self.pdfs['EWPDF'] = [ewPdf,pd.core.series.Series([ewMeas],index=["EW"])]
             pen = (0,100,0)
             cont = 1.0
@@ -1172,10 +1177,11 @@ class App(QtGui.QMainWindow):
             if not(ok):
                 return
             vals = az.summary(self.arviz[choice],round_to=5,stat_funcs=[conf_low,conf_high])#var_names?
-            axes = az.plot_pair(self.arviz[choice],kind=['hexbin',"kde"],kde_kwargs={"fill_last":False},marginals=True,point_estimate="mean",marginal_kwargs={"quantiles":[0.16,0.5,0.84]})
+            az.rcParams['plot.max_subplots'] = 80
+            axes = az.plot_pair(self.arviz[choice],kind=['hexbin',"kde"],kde_kwargs={"fill_last":False},marginals=True,point_estimate="mean",marginal_kwargs={"quantiles":[0.16,0.5,0.84]},figsize=(len(vals['mean']),len(vals['mean'])))
             for i in range(len(axes)):
                 axes[i][i].set_title(r'${0}={1}_{{{2}}}^{{{3}}}$'.format(vals['mean'].keys()[i],vals['mean'][i],vals['conf_low'][i]-vals['mean'][i],vals['conf_high'][i]-vals['mean'][i]))
-            if choice.find('EW') != -1:    
+            if (choice.find('EW') != -1) or (choice.find('Voigt') != -1):    
                 fig2 = plt.figure()
                 ax2 = plt.axes()
                 y,x,_ = ax2.hist(self.pdfs['EWPDF'][0],bins=100,density=True)
