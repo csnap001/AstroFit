@@ -865,7 +865,8 @@ class App(QtGui.QMainWindow):
             elif func == 'Voigt':
                 gvamp = (0,np.max(flux[mask]))
                 gtau = np.array(zB) + 200
-                self.Fitter(piecewise,data,flux[mask],err[mask],finalwl,[(lr[0]+100,lr[0]+200),(lr[0],lr[1]),zB,(0,np.max(flux[mask])),ampB,(-5,5),sigB,(-1000,1000),(np.min(flux[mask])/np.max(finalwl),np.max(flux[mask])/np.min(finalwl))],name='Voigt',plt_name=dat_choice)
+                diffwl = np.diff(wl)
+                self.Fitter(piecewise,data,flux[mask],err[mask],finalwl,[(lr[0]+100,lr[0]+200),(lr[0],lr[1]),zB,(0,np.max(flux[mask])),ampB,(-5,5),sigB,(-1000,1000),(np.min(flux[mask])/(100*np.max(diffwl)),np.max(flux[mask])/np.min(diffwl))],name='Voigt',plt_name=dat_choice)
         else:
             qt.QMessageBox.about(self,"No data on screen","Not fitting")
                         
@@ -1024,7 +1025,7 @@ class App(QtGui.QMainWindow):
                 alpha = pm.TruncatedNormal("alpha",mu=(bounds[5][0]+bounds[5][1])/2,sigma=0.8*(bounds[5][1] - bounds[5][0]),testval=(bounds[5][0]+bounds[5][1])/2,lower=-5,upper=5)
                 sigma = pm.TruncatedNormal("sigma",mu=(bounds[6][0]+bounds[6][1])/2,sigma=0.4*(bounds[6][1] - bounds[6][0]),testval=(bounds[6][0]+bounds[6][1])/2,lower=0)
                 b = pm.Normal("b",mu=(bounds[7][0]+bounds[7][1])/2,sigma=0.4*(bounds[7][1] - bounds[7][0]),testval=(bounds[7][0]+bounds[7][1])/2)
-                m = pm.Normal("m",mu=(bounds[8][0]+bounds[8][1])/2,sigma=0.4*(bounds[8][1] - bounds[8][0]),testval=(bounds[8][0]+bounds[8][1])/2)
+                m = pm.TruncatedNormal("m",mu=(bounds[8][0]+bounds[8][1])/2,sigma=0.4*(bounds[8][1] - bounds[8][0]),testval=(bounds[8][0]+bounds[8][1])/2,lower=0.0)
                 mu = func(wl,switch,unity,centroid,cont_amp,amp,alpha,sigma,b,m)
                 #mu = pm.math.switch(wl <= switch,polygauss(wl,amp,centroid,sigma,b,m),Pow(wl,cont_amp,alpha,unity))
                 
