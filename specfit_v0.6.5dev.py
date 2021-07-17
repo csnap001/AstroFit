@@ -267,10 +267,10 @@ class App(QtGui.QMainWindow):
         self.arviz = {}
 
         self.toolbar = QToolBar("Spec Tools")
-        self.addToolBar(self.toolbar)
+        self.addToolBar(self.toolbar) 
         #Other tools
         self.sampler = qt.QComboBox(self)
-        self.sampler.addItems([ 'NUTS', 'Metropolis', 'Slice', 'HamiltonianMC', 'BinaryMetropolis'])
+        self.sampler.addItems([ 'Metropolis', 'NUTS', 'Slice', 'HamiltonianMC', 'BinaryMetropolis'])
         #Creating buttons
         cb.buttons(self)
         #Connecting buttons to functions
@@ -808,6 +808,10 @@ class App(QtGui.QMainWindow):
             if Ans==qt.QMessageBox.Yes:
                 z, ok = qt.QInputDialog.getDouble(self,"Get redshift","z:",2.0,0.0,10.0,10)
                 if ok:
+                    wlSiII = 1260*(1+z)
+                    wlOISiII = 1303*(1+z)
+                    wlCII = 1334*(1+z)
+                    wlSiIV = 1393*(1+z)
                     wlCIV = 1550*(1+z)
                     wlHeII = 1640*(1+z)#TODO: re-impliment using list of lines instead
                     wlOIII = 1665*(1+z)
@@ -820,9 +824,13 @@ class App(QtGui.QMainWindow):
                     OIIIMask = (c*(wl-wlOIII)/wlOIII > -400) & (c*(wl-wlOIII)/wlOIII < 400)
                     CIIIMask = (c*(wl-wlCIII)/wlCIII > -400) & (c*(wl-wlCIII)/wlCIII < 400)
                     OIVMask = (c*(wl-wlOIV)/wlOIV > -400) & (c*(wl-wlOIV)/wlOIV < 400)
+                    SiIIMask = (c*(wl-wlSiII)/wlSiII > -400) & (c*(wl-wlSiII)/wlSiII < 400)
+                    OISiIIMask = (c*(wl-wlOISiII)/wlOISiII > -400) & (c*(wl-wlOISiII)/wlOISiII < 400)
+                    CIIMask = (c*(wl-wlCII)/wlCII > -400) & (c*(wl-wlCII)/wlCII < 400)
+                    SiIVMask = (c*(wl-wlSiIV)/wlSiIV > -400) & (c*(wl-wlSiIV)/wlSiIV < 400)
                     #add1 = (wl > 4720) & (wl < 4750)
                     #add2 = (wl > 4908) & (wl < 4933)
-                    TotMask = CIVMask | HeIIMask | OIIIMask | CIIIMask | OIVMask #| add1 | add2
+                    TotMask = CIVMask | HeIIMask | OIIIMask | CIIIMask | OIVMask | SiIIMask | OISiIIMask | CIIMask | SiIVMask#| add1 | add2
                     x = wl[TotMask]
                     y = flux[TotMask]
                     CIVscatter = pg.ScatterPlotItem(x=x,y=y,pen=pg.mkPen('g'),brush=pg.mkBrush('g'))
@@ -842,9 +850,10 @@ class App(QtGui.QMainWindow):
             peakFl = flux[mask][index]
             #peakFl = flux[altmask][index]
             #finalwl = wl[mask]
+            peakWl, ok = qt.QInputDialog.getDouble(self,"Get Emission line location","Centroid:",3000.0,0.0,10000.0,10)
 
-            zB = ((peakWl - 0.1*peakWl), (peakWl + 0.1*peakWl))
-            zB = (zB[0][0],zB[1][0])#necessary b/c zB is created as array of arrays and numpy fails with array inputs
+            zB = ((peakWl - 0.01*peakWl), (peakWl + 0.01*peakWl))
+            #zB = (zB[0][0],zB[1][0])#necessary b/c zB is created as array of arrays and numpy fails with array inputs
             sigB = (0.01, 15)
             ampB = (0,4*peakFl)
             ampB = (ampB[0],ampB[1][0])#same as z
@@ -1286,6 +1295,21 @@ class App(QtGui.QMainWindow):
             self.flux[dat_choice].setPen(color)
         if not(self.err==None) and isErr:
             self.err[dat_choice].setPen(color)
+
+    def upperLimit(self):
+        choice, ok = qt.QInputDialog.getItem(self,"Which to fit","Choose data set:",self.names1d,0,False)
+        z, ok = qt.QInputDialog.getDouble(self,"Get redshift","z:",2.0,0.0,10.0,10)
+        Lya = 1215.56845*(1+z)#Caroll and Ostlie second edition equation 5.7
+        width, ok = qt.QInputDialog.getDouble(self,"Get width",r"$\Delta w:$",2.0,0.0,20.0,10)
+        dat_choice = self.names1d.index(choice)
+        data = self.plt[dat_choice].listDataItems()
+        wl = data[0].getData()[0][:-1]
+        err = data[1].getData()[1]
+        diffwl = np.diff(wl)
+        diffwl = np.append(diffwl,2.18)
+        mask = (wl >= Lya - width/2) & (wl <= Lya + width/2)
+        Flux5sig = 5*np.sqrt(np.sum(err[mask]**2*diffwl[mask]**2))
+        qt.QMessageBox.about(self,"Upper Limit",r"The 5$\sigma$ upper limit is {}".format(Flux5sig))
 
     #TODO: broken, got to deal with len(y) + 1 = len(x) details for step plot
     def artificial_gauss(self):

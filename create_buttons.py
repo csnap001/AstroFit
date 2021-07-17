@@ -44,4 +44,5 @@ def buttons(self):
         self.s_coadd = qt.QPushButton("Save Coadd",self)
         self.croi = qt.QPushButton("Make ROI",self)
         self.extract1d = qt.QPushButton("Extract from ROI",self)
+        self.upperlim = qt.QPushButton("Upper Limit",self)
         return

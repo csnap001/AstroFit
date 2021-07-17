@@ -44,4 +44,5 @@ def connect(self):
         self.s_coadd.clicked.connect(self.save_coadd)
         self.croi.clicked.connect(self.makeROI)
         self.extract1d.clicked.connect(self.Extract1d)
+        self.upperlim.clicked.connect(self.upperLimit)
         return
