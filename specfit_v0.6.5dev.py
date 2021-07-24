@@ -866,7 +866,13 @@ class App(QtGui.QMainWindow):
                 gvamp = (0,np.max(flux[mask]))
                 gtau = np.array(zB) + 200
                 diffwl = np.diff(wl)
-                self.Fitter(piecewise,data,flux[mask],err[mask],finalwl,[(lr[0]+100,lr[0]+200),(lr[0],lr[1]),zB,(0,np.max(flux[mask])),ampB,(-5,5),sigB,(-1000,1000),(np.min(flux[mask])/(100*np.max(diffwl)),np.max(flux[mask])/np.min(diffwl))],name='Voigt',plt_name=dat_choice)
+                index = index[0][0]
+                f0 = flux[mask][index+8]
+                wl0 = finalwl[index+8]
+                f1 = flux[mask][index+50]
+                wl1 = finalwl[index+50]
+                slope = abs(f1-f0)/abs(wl1-wl0)
+                self.Fitter(piecewise,data,flux[mask],err[mask],finalwl,[(lr[0]+100,lr[0]+200),(lr[0],lr[1]),zB,(0,np.max(flux[mask])),ampB,(-5,5),sigB,(-1000,1000),(slope-0.2*slope,slope+0.2*slope)],name='Voigt',plt_name=dat_choice)
         else:
             qt.QMessageBox.about(self,"No data on screen","Not fitting")
                         
@@ -1046,7 +1052,7 @@ class App(QtGui.QMainWindow):
             step = self.sampler.currentText()
             cores = multi.cpu_count()
             if step == 'Metropolis':
-                trace = pm.sample(10000,tune=5000,cores=10,init='adapt_diag',step=pm.step_methods.Metropolis())#used for testing parameter space
+                trace = pm.sample(40000,tune=5000,cores=10,init='adapt_diag',step=pm.step_methods.Metropolis())#used for testing parameter space
             elif (cores >= 10) and (step == 'NUTS'):
                 trace = pm.sample(10000,tune=5000,target_accept=0.8,cores=10,init='adapt_diag')
             elif step == 'NUTS':
