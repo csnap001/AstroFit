@@ -57,11 +57,9 @@ Class Functions:
 
 """
 
-import hashlib
 import PyQt5.QtWidgets as qt
 from astropy.io.fits.hdu.image import ImageHDU
 from astropy.io.fits.hdu.table import BinTableHDU, TableHDU
-from numpy.lib.polynomial import poly
 from pyqtgraph.Qt import QtCore,QtGui
 import pyqtgraph as pg
 import pandas as pd
