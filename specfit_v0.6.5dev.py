@@ -1094,8 +1094,8 @@ class App(QtGui.QMainWindow):
             if name in self.pdfs.keys():
                 name += ".1"
             self.pdfs[name] = (samples,vals['mean'])
-            ewPdf = np.sqrt(2*np.pi)*np.array(samples['amp'])*np.array(samples['sigma'])/(polynomial(vals['mean']['centroid'],samples['b'],samples['m']))
-            ewMeas = np.sqrt(2*np.pi)*np.array(samples['amp'])*np.array(samples['sigma'])/(polynomial(vals['mean']['centroid'],vals['mean']['b'],vals['mean']['m']))
+            ewPdf = np.sqrt(2*np.pi)*np.array(samples['amp'])*np.array(samples['sigma'])/Pow(vals['mean']['centroid'],samples['cont_amp'],samples['alpha'],samples['unity'])
+            ewMeas = np.sqrt(2*np.pi)*np.array(samples['amp'])*np.array(samples['sigma'])/Pow(vals['mean']['centroid'],vals['mean']['cont_amp'],vals['mean']['alpha'],vals['mean']['unity'])
             self.pdfs['EWPDF'] = [ewPdf,pd.core.series.Series([ewMeas],index=["EW"])]
             pen = (0,100,0)
             cont = 1.0
