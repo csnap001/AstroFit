@@ -755,12 +755,9 @@ class App(QtGui.QMainWindow):
             flux = data[0].getData()[1]
             err = data[1].getData()[1]
            
-            #TODO: in order to get full uncertainty of given quantity, need to define
-            #prior probability as the distribution of the continuum 
-            # (which has its own prior of course)
             mask = (wl[:-1] > lr[0]) & (wl[:-1] < lr[1])
             finalflux = flux[mask]
-            finalwl = wl[mask]
+            finalwl = wl[:-1][mask]
             finalerr = err[mask]
 
             #Start Line center determination
@@ -771,6 +768,7 @@ class App(QtGui.QMainWindow):
             infline = pg.InfiniteLine(Lin,pen=(100,50,200))
             self.plt[dat_choice].addItem(infline)
             qt.QMessageBox.about(self,"Measured","Line center: {0} \xb1 {1}".format(Lin,Linerr))
+            qt.QMessageBox.about(self,"Integral","Flux: {}".format(np.trapz(finalflux,x=finalwl)))
         else:
             qt.QMessageBox.about(self,"No data","No data to measure")
 
