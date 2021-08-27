@@ -559,7 +559,11 @@ class App(QtGui.QMainWindow):
                 Happy, ok = qt.QInputDialog.getItem(self,"Good","Happy?:",["True","False"],0,False)
                 if Happy == "True":
                     break
-            
+
+    #TODO: add capability to move plots along y-axis and to have multiple 
+    #plots on same set of axes. Need to make sure calcs are on base data
+    #and not the manipulated set
+
     def plot_1d_fits(self,fileName=""):
         count = len(self.plt) - 1
         #TODO: add legend (should be done for fits as well). legend = pg.LegendItem, legend.setParentItem(self.plot_view)
@@ -730,6 +734,10 @@ class App(QtGui.QMainWindow):
         else:
             qt.QMessageBox.about(self,"No data","No data to measure")
 
+    #TODO: create something for grabbing filters (a couple hst for now) and 
+    #calculating the ratio between spectra and photometry to estimate 
+    #slitloss corrections
+
     def LineCenter(self):
         '''
         Module for determining line center non-parametrically
@@ -768,7 +776,11 @@ class App(QtGui.QMainWindow):
             infline = pg.InfiniteLine(Lin,pen=(100,50,200))
             self.plt[dat_choice].addItem(infline)
             qt.QMessageBox.about(self,"Measured","Line center: {0} \xb1 {1}".format(Lin,Linerr))
-            qt.QMessageBox.about(self,"Integral","Flux: {}".format(np.trapz(finalflux,x=finalwl)))
+            HST_dat = ascii.read('DATA/hst_wfc_475W.txt')
+            hst_wl = HST_dat['col1']
+            hst_tp = HST_dat['col2']
+            newflux = spectres(hst_wl,finalwl,finalflux,fill=0,verbose=False)
+            qt.QMessageBox.about(self,"Integral","Flux: {}".format(np.trapz(newflux*hst_tp,x=hst_wl)/np.trapz(hst_tp,x=hst_wl)))
         else:
             qt.QMessageBox.about(self,"No data","No data to measure")
 
