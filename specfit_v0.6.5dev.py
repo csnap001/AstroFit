@@ -218,7 +218,7 @@ class App(QtGui.QMainWindow):
 
     def __init__(self):
         super().__init__()
-
+        
         self.title = "SpecFit"
         self.left = 20
         self.top = 20
@@ -1507,13 +1507,10 @@ class App(QtGui.QMainWindow):
     #launch with python -m pyqtgraph.examples
     #image analysis example gives a great tool
 
-    #TODO: this is currently broken, need method for adding frames to view one by one for multiple frame analysis
-    # See pyqtgraph examples for help on this. Can easily accomplish this with current structure, but not interesting now
-    # using docking
     #NOTE: for analysis of 2D spectra there exists a fitting algorithm with astropy (astropy.modeling.(fitting,models))
     # it seems to be good for analysis of flat frams
     # can look at ccdproc for coadding
-    # image_view widget has a close function that may be preferabel to closing the whole dock
+    # image_view widget has a close function that may be preferable to closing the whole dock
     # image_view has a getROI function that returns the ROI plotWidget, this could be 
     # saved or transferred to the 1dPlotting for further analysis (fitting, wl determination, etc.)
     #TODO: 2d coadding is a feature I want to add in the near future. for pypeit I want to 
