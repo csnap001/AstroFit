@@ -45,4 +45,5 @@ def connect(self):
         self.croi.clicked.connect(self.makeROI)
         self.extract1d.clicked.connect(self.Extract1d)
         self.upperlim.clicked.connect(self.upperLimit)
+        self.specphotflux.clicked.connect(self.fileflux)
         return

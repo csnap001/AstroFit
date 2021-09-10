@@ -449,6 +449,9 @@ class App(QtGui.QMainWindow):
         self.is2d = True
         self.openFileNameDialog(is2d=self.is2d)
 
+    def fileflux(self):
+        self.openFileNamesDialog(isfluxest=True)
+
     def set1dFluxCol(self):
         isFlux = True
         self.plotColoring(isFlux=isFlux)
@@ -494,7 +497,7 @@ class App(QtGui.QMainWindow):
             qt.QMessageBox.about(self,"Opening File","ERROR: (Program Name) only supports .fits files")
             #TODO: Need to come up with name for GUI application
 
-    def openFileNamesDialog(self,iscoadd=False,ispypeit=False):
+    def openFileNamesDialog(self,iscoadd=False,ispypeit=False,isfluxest=False):
         options = qt.QFileDialog.Options()
         options |= qt.QFileDialog.DontUseNativeDialog
         files, _ = qt.QFileDialog.getOpenFileNames(self, "QFileDialog.getOpenFileNames()", "","All Files (*);;Fits Files (*.fits);;Python files (*.py)", options=options)
@@ -503,6 +506,56 @@ class App(QtGui.QMainWindow):
         if files and iscoadd:
             #embed()
             self.coadd_1d(files)
+        if files and isfluxest:
+            self.estimate_flux(files)
+
+    def estimate_flux(self,files):
+        ID = []
+        specFlux = []
+        photFlux = []
+        ratio = []
+        options = qt.QFileDialog.Options()
+        options |= qt.QFileDialog.DontUseNativeDialog
+        #Used to grab catalog of photometry to compare with
+        catName, _ = qt.QFileDialog.getOpenFileName(self,"Photometric Catalog","","All Files (*);;Fits Files (*.fits);;Python files (*.py)",options = options)
+        #TODO: Be good to generalize this to other filters
+        if catName.split('.')[-1] == 'fits': 
+            cat = fits.open(catName)
+            T = Table(cat[1].data)
+        else: 
+            cat = ascii.read(catName)
+            T = Table(cat)
+        for f in files:
+            name = str(f.split('/')[-1].split('_')[0])
+            arr = np.where(T['Names'] == int(name))
+            check = T['Cluster'][arr[0]] == 'A1689'
+            if arr[0].size == 0:
+                #TODO: probably should have a note here
+                continue
+            
+            elif arr[0].size > 1:
+                corr = np.where(f.split('/')[-1].split('_')[1] == T['Cluster'][arr[0]])
+                check = T['Cluster'][arr[0]][corr[0]] == 'A1689'
+            
+            if check:
+                HST_dat = ascii.read('DATA/hst_wfc_475W.txt')
+                hst_wl = HST_dat['col1']
+                hst_tp = HST_dat['col2']
+            else:
+                HST_dat = ascii.read('DATA/hst_wfc_435W.txt')
+                hst_wl = HST_dat['col1']
+                hst_tp = HST_dat['col2']
+            ID.append(name)
+            data = fits.open(f)[1].data
+            wl = data['wave']
+            flux = data['flux']
+            newflux = spectres(hst_wl,wl,flux,fill=0,verbose=False)
+            photFlux.append(T['F475W/F435W'][arr[0]][0])
+            if check: specFlux.append(1e-17*(4750**2/(3*1e18))*np.trapz(newflux*hst_tp,x=hst_wl)/np.trapz(hst_tp,x=hst_wl))
+            else: specFlux.append(1e-17*(4350**2/(3*1e18))*np.trapz(newflux*hst_tp,x=hst_wl)/np.trapz(hst_tp,x=hst_wl))
+            ratio.append(photFlux[-1]/specFlux[-1])
+        newT = Table([ID,specFlux,photFlux,ratio],names=('ID','specFlux','photFlux','ratio'))
+        newT.write('Slitloss.fits',format='fits')           
     
     def table_create(self,fileName=""):
         
@@ -1060,7 +1113,7 @@ class App(QtGui.QMainWindow):
             step = self.sampler.currentText()
             cores = multi.cpu_count()
             if step == 'Metropolis':
-                trace = pm.sample(40000,tune=5000,cores=10,init='adapt_diag',step=pm.step_methods.Metropolis())#used for testing parameter space
+                trace = pm.sample(20000,tune=25000,cores=10,init='adapt_diag',step=pm.step_methods.Metropolis())#used for testing parameter space
             elif (cores >= 10) and (step == 'NUTS'):
                 trace = pm.sample(10000,tune=5000,target_accept=0.8,cores=10,init='adapt_diag')
             elif step == 'NUTS':
@@ -1095,6 +1148,7 @@ class App(QtGui.QMainWindow):
             ewPdf = np.sqrt(2*np.pi)*np.array(samples['amp'])*np.array(samples['sigma'])/Pow(vals['mean']['centroid'],samples['cont_amp'],samples['alpha'],samples['unity'])
             ewMeas = np.sqrt(2*np.pi)*vals['mean']['amp']*vals['mean']['sigma']/Pow(vals['mean']['centroid'],vals['mean']['cont_amp'],vals['mean']['alpha'],vals['mean']['unity'])
             self.pdfs['EWPDF'] = [ewPdf,pd.core.series.Series([ewMeas],index=["EW"])]
+            self.pdfs['Flux'] = [np.sqrt(2*np.pi)*np.array(samples['amp'])*np.array(samples['sigma'])]
             pen = (0,100,0)
             cont = 1.0
             #This is used for GUI image such that we can see the fit 
@@ -1107,6 +1161,7 @@ class App(QtGui.QMainWindow):
             ewPdf = np.sqrt(2*np.pi)*np.array(samples['amp'])*np.array(samples['sigma'])/Pow(vals['mean']['centroid'],samples['cont_amp'],samples['alpha'],samples['unity'])
             ewMeas = np.sqrt(2*np.pi)*np.array(samples['amp'])*np.array(samples['sigma'])/Pow(vals['mean']['centroid'],vals['mean']['cont_amp'],vals['mean']['alpha'],vals['mean']['unity'])
             self.pdfs['EWPDF'] = [ewPdf,pd.core.series.Series([ewMeas],index=["EW"])]
+            self.pdfs['Flux'] = [np.sqrt(2*np.pi)*np.array(samples['amp'])*np.array(samples['sigma'])]
             pen = (0,100,0)
             cont = 1.0
             #TODO: plotting of function failing, unsure why. Also EW not being plotted because name doesn't include "EW"
@@ -1216,6 +1271,14 @@ class App(QtGui.QMainWindow):
                 ax2.vlines(m,0,np.max(y),color='k')
                 ax2.text(np.mean(x) - np.std(x),0.8*np.max(y),r'${0}^{{{1}}}_{{{2}}}$'.format(m,up-m,down-m))
                 ax2.set_xlabel('EW')
+                fig3 = plt.figure()
+                ax3 = plt.axes()
+                fy,fx,_ = ax3.hist(self.pdfs['Flux'][0],bins=100,density=True)
+                fup = conf_high(self.pdfs['Flux'][0])
+                fdown = conf_low(self.pdfs['Flux'][0])
+                fm = np.mean(self.pdfs['Flux'][0])
+                ax3.vlines(fm,0,np.max(fy),color='k')
+                ax3.text(np.mean(fx)-np.std(fx),0.8*np.max(fy),r'${0}^{{{1}}}_{{{2}}}$'.format(fm,fup-fm,fdown-fm))
             plt.show()
         del(basic_model)
 

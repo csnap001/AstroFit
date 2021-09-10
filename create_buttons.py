@@ -45,4 +45,5 @@ def buttons(self):
         self.croi = qt.QPushButton("Make ROI",self)
         self.extract1d = qt.QPushButton("Extract from ROI",self)
         self.upperlim = qt.QPushButton("Upper Limit",self)
+        self.specphotflux = qt.QPushButton("Slit loss estimate",self)
         return

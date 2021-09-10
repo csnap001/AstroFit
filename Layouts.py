@@ -44,3 +44,4 @@ def Lay(self):
         self.toolbar.addWidget(self.extract1d)
         self.toolbar.addWidget(self.sampler)
         self.toolbar.addWidget(self.upperlim)
+        self.toolbar.addWidget(self.specphotflux)
