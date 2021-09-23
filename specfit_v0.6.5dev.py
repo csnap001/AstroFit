@@ -1582,6 +1582,12 @@ class App(QtGui.QMainWindow):
     # (this presumes that bits that are "on" are not desired and should be given a value of 0)
 
     #TODO: Pypeit coadding that is useful does: (Science - skymodel)*np.sqrt(ivarmodel)*(mask == 0)
+    #TODO: We can extract individual slits using pypeit's spec2dobj Class
+    # i.e. spec2DObj = spec2dobj.Spec2DObj.from_file(filename)
+    # slitmask = spec2DObj.slits.slit_img(flexure=spec2DObj.sci_spat_flexure)
+    # then the slit is spec2DObj.sciimg*(slitmask==slit_ID)
+    # where the ID's are given by filename as extension name DET##-SLITS
+    # grab the data and then they are given by ['spat_id']
     def pyp_coadd(self,files):
         multi = []
         choice, ok = qt.QInputDialog.getItem(self,"Which Detector?","choose a data set:",['1','2'],0,False)
