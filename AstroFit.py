@@ -388,6 +388,8 @@ class App(QtGui.QMainWindow):
 
     def addPlot(self,name):
         #TODO:need to figure out how to handle placement after removing plots
+        #Likely better to change this to tabs instead of multiple plots in a 
+        #single window
         num = len(self.plt)
         if num < 2:
             self.plt.append(self.Gwin1d.addPlot(title=name))
