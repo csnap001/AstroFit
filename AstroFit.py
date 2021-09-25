@@ -1631,7 +1631,8 @@ class App(QtGui.QMainWindow):
             merr = np.sqrt((np.sum(err*multi**2,axis=0)/np.sum(err,axis=0) - (np.sum(err*multi,axis=0)/np.sum(err,axis=0))**2)/(len(multi)-1))
             '''
             data = np.median(multi,axis=0)
-            merr = np.sqrt((np.sum(err*multi**2,axis=0)/np.sum(err,axis=0) - (np.sum(err*multi,axis=0)/np.sum(err,axis=0))**2)/(len(multi)-1))*np.sqrt(np.pi*(2*len(multi)-1)/(4*len(multi)-4))
+            if len(multi) > 1: merr = np.sqrt((np.sum(err*multi**2,axis=0)/np.sum(err,axis=0) - (np.sum(err*multi,axis=0)/np.sum(err,axis=0))**2)/(len(multi)-1))*np.sqrt(np.pi*(2*len(multi)-1)/(4*len(multi)-4))
+            else: merr = err
         merr[np.isnan(merr)] = 1000
         self.imv = pg.ImageView(view=pg.PlotItem())
         self.plot2d.addWidget(self.imv)
