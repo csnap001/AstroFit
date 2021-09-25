@@ -1729,5 +1729,7 @@ class App(QtGui.QMainWindow):
             
 if __name__ == '__main__':
     app = qt.QApplication(sys.argv)
+    app.setWindowIcon(QtGui.QIcon("Images/Spectra_for_showing.png"))#This will display the logo on macs
+    #TODO: Create better logo
     ex = App()
     sys.exit(app.exec_())
