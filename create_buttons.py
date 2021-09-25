@@ -40,4 +40,10 @@ def buttons(self):
         self.r2D = qt.QPushButton("Close 2D", self)
         self.sm = qt.QPushButton("Smooth",self)
         self.pypeit = qt.QPushButton("Pypeit 2D",self)
+        self.coadd1d = qt.QPushButton("1d Coadd",self)
+        self.s_coadd = qt.QPushButton("Save Coadd",self)
+        self.croi = qt.QPushButton("Make ROI",self)
+        self.extract1d = qt.QPushButton("Extract from ROI",self)
+        self.upperlim = qt.QPushButton("Upper Limit",self)
+        self.specphotflux = qt.QPushButton("Slit loss estimate",self)
         return
