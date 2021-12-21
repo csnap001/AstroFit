@@ -1537,13 +1537,22 @@ class App(QtGui.QMainWindow):
     #TODO: generalize, currently constructed for pypeit 1.3.3
     def coadd_1d(self,files):
         hdul = []
+        a = []
         for f in files:
             hdul.append(fits.open(f))
+            if f == "10013_M0717_1.fits":
+                a.append(0.544597953302009)
+            elif f == "2614_M1149_2.fits":
+                a.append(0.833111698664391)
+            else:
+                a.append(0.533669386139336)
         resdata = []
         new_grid = np.arange(3000,6000,2.18)
+        count = 0
         for h in hdul:
             data = h[1].data
-            resdata.append(spectres(new_grid,data['wave'],data['flux'],1/np.sqrt(data['ivar'])))
+            resdata.append(spectres(new_grid,data['wave'],a[count]*data['flux'],a[count]*1/np.sqrt(data['ivar'])))
+            count += 1
 
         ivar_new = np.array([i[1] for i in resdata])
         ivar_new = 1/np.square(ivar_new)
