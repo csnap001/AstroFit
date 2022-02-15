@@ -1,7 +1,6 @@
 """
 Created Thursday 8th, 2019 by Christopher Snapp-Kolas
 
-TODO: Rename the file so that it better describes its use.
 TODO: add "clear screen" option for clearing displays
 TODO: Add threading of functions to allow continued functionality of other QtGui objects. Although there
 should be checks to ensure the user isn't overworking their computer.
@@ -560,7 +559,9 @@ class App(QtGui.QMainWindow):
         newT.write('Slitloss.fits',format='fits')           
     
     def table_create(self,fileName=""):
-        
+        #TODO: should add in capabilities such as table modification
+        # that can be written to a new fits file. Would also be nice
+        # if users could do calculations directly from the table.
         self.table.clear()
         fits = fileName.find(".fits")
         dat = fileName.find(".dat")
@@ -671,11 +672,14 @@ class App(QtGui.QMainWindow):
             name, ok = qt.QInputDialog.getItem(self,"data","Which data element?:",data_names.keys(),0,False)
             if not(ok):
                 qt.QMessageBox.about(self,"No operation?","No data element was chosen")
-            op, ok = qt.QInputDialog.getItem(self,"what Math?","What operation would you like to perform",["invert","square root"],0,False)
+            op, ok = qt.QInputDialog.getItem(self,"what Math?","What operation would you like to perform",["invert","square root","scalar multiplication"],0,False)
             if op == "invert":
                 data_names[name] = 1/data_names[name]
             if op == "square root":
                 data_names[name] = np.sqrt(data_names[name])
+            if op == "scalar multiplication":
+                scalar,_ = qt.QInputDialog.getDouble(self,"Scalar Multiplication","What value?",0,-1e200,1e200,10)
+                data_names[name] = data_names[name]*scalar
 
             self.plt[dat_choice].clear()
             self.flux[dat_choice] = self.plt[dat_choice].plot(data_names['wl'],data_names['flux'],pen='b',stepMode=True)
@@ -744,7 +748,11 @@ class App(QtGui.QMainWindow):
             wl = data[0].getData()[0]
             flux = data[0].getData()[1]
             err = data[1].getData()[1]
-           
+            reply = qt.QMessageBox.question(self,'pickles','do you want a pickle?',qt.QMessageBox.Yes|qt.QMessageBox.No,qt.QMessageBox.No)
+            if reply == qt.QMessageBox.Yes:
+                options = qt.QFileDialog.Options()
+                options |= qt.QFileDialog.DontUseNativeDialog
+                pick,ok = qt.QFileDialog.getOpenFileName(self,"QFileDialog.getOpenFileName()","","All Files (*);;pickles (*.pkl)",options = options) 
             if len(self.contfit[0]) > 0:
                 items = ("{}".format(i) for i in range(len(self.contfit[0])))
                 cont, ok = qt.QInputDialog.getItem(self,"Continuum","Which Continuum?:",self.pdfs.keys(),0,False)
@@ -778,6 +786,60 @@ class App(QtGui.QMainWindow):
                 #Start EW determination
                 fflux = [flux - cont_pdf for flux in finalflux]#NOTE: first step in equivalent width determination
                 EW_pdf = np.trapz(fflux,x=finalwl,axis=0)/cont_pdf
+                EW = np.mean(EW_pdf)
+                self.pdfs['npEW'] = [EW_pdf,pd.core.series.Series([EW],index=["EW"])]
+                pdf_err = np.std(EW_pdf)
+                err_list = np.array([(finalwl[i+1] - finalwl[i])/2 * np.sqrt(finalerr[i+1]**2 + finalerr[i]**2) for i in range(len(finalwl)-1)])
+                EWerr = np.sqrt(np.sum(err_list**2) + pdf_err**2)
+                qt.QMessageBox.about(self,"Measured","Non-Parameterized EW: {0} \xb1 {1}".format(EW,EWerr))
+            elif reply == qt.QMessageBox.Yes:
+                cont_params = pd.read_pickle(pick)
+                #TODO: two scenarios (currently) 1: use slope m and intercept b to estimate continuum
+                # 2: use centroid, cont_amp, and unity to estimate continuum
+                # 1: continuum = cont_params['m']*lambda + cont_params['b']
+                # 2: continuum = cont_params['cont_amp']*(lamb/cont_params['unity'])**cont_params['alpha']
+                # Then, take (integral - continuum)/continuum to get the equivalent width
+                mask = (wl[:-1] > lr[0]) & (wl[:-1] < lr[1])
+                finalflux = flux[mask]
+                finalwl = wl[:-1][mask]
+                finalerr = err[mask]
+                ind = np.where(finalflux == np.max(finalflux))
+                z, ok = qt.QInputDialog.getDouble(self,"Get redshift","z:",2.0,0.0,10.0,10)
+                maxwl = 1215.56845*(1+z)
+                print(maxwl)
+                curve, ok = qt.QInputDialog.getItem(self,"Continuum","line or power law?:",['line','power'],0,False)
+                if curve == 'line':
+                    cont_pdf = linear(maxwl,cont_params['m'],cont_params['b'])
+                    #NOTE: this won't work if this wasn't done
+                elif curve == 'power':
+                    cont_pdf = Pow(maxwl,cont_params['amp'],cont_params['alpha'],cont_params['unity'])
+                    #NOTE: this presumes the naming convention for when just a continuum is fit and won't work
+                    # otherwise
+                else:
+                    return
+                left = qt.QInputDialog.getDouble(self,"left","What velocity left maximum?: ",0,False)
+                right = qt.QInputDialog.getDouble(self,"right","What velocity right maximum?: ",0,False)
+                newMask = (finalwl > maxwl*(1-(left[0]/3e5))) & (finalwl < maxwl*(1+(right[0]/3e5)))
+                #NOTE: this gives consistent results, though they may not be the best choice
+                finalflux = finalflux[newMask]
+                finalwl = finalwl[newMask]
+                finalerr = finalerr[newMask]
+                #TODO:fillbetween?
+                Limit_curve_top = pg.PlotCurveItem(finalwl,finalflux)
+                Limit_curve_bottom = pg.PlotCurveItem(finalwl,finalerr)
+                self.fill = pg.FillBetweenItem(Limit_curve_bottom,Limit_curve_top,brush=(0,100,0,150))
+                self.plt[dat_choice].addItem(self.fill)
+
+
+                #Start EW determination
+                fluxes = np.random.normal(finalflux,scale=finalerr,size=(1000,len(finalflux)))
+                EW_pdf = np.zeros((len(fluxes),len(cont_pdf)))
+                for i,flux in enumerate(fluxes):
+                    fflux = [f - cont_pdf for f in flux]
+                    EW_pdf = np.trapz(fflux,x=finalwl,axis=0)/cont_pdf
+                #fflux = [flux - cont_pdf for flux in finalflux]#NOTE: first step in equivalent width determination
+                #EW_pdf = np.trapz(fflux,x=finalwl,axis=0)/cont_pdf
+                EW_pdf = EW_pdf.flatten()
                 EW = np.mean(EW_pdf)
                 self.pdfs['npEW'] = [EW_pdf,pd.core.series.Series([EW],index=["EW"])]
                 pdf_err = np.std(EW_pdf)
@@ -1172,8 +1234,39 @@ class App(QtGui.QMainWindow):
         del(basic_model)
         
     #TODO: Should consider allowing user to adjust parameterization
-    #but should make this a visual thing like a slider bar (It would be helpful to output the sigma
+    # but should make this a visual thing like a slider bar (It would be helpful to output the sigma
     # compared with the original choice for sigma in the normal distribution)
+    #TODO: I also want to show the corner plots for the parameterization
+    # and allow the user to hover over the space and select a point
+    # this point would then be used to plot the fit to the spectrum.
+    # This would mostly be an educational thing, though it may be useful
+    # for teasing out problem parameter spaces as well.
+    def save_spectrum(self):
+        choice, ok = qt.QInputDialog.getItem(self,"Which to fit","Choose data set:",self.names1d,0,False)
+        if not(ok):
+            qt.QMessageBox.about(self,"Not Fitting","Chose no data, not fitting.")
+            return
+        dat_choice = self.names1d.index(choice)
+        data = self.plt[dat_choice].listDataItems()
+        wl = data[0].getData()[0][:-1]
+        flux = data[0].getData()[1]
+        err = data[1].getData()[1]
+
+        new_data = np.rec.array([flux,err,wl],
+                    formats='float32,float32,float32',names='flux,sig,wave')
+        bintable = fits.BinTableHDU(new_data)
+        name, ok = qt.QInputDialog.getText(self,"Filename","Name the fits file:")
+        dir_ = QtGui.QFileDialog.getExistingDirectory(self, 'Select a folder:', 'C:\\', QtGui.QFileDialog.ShowDirsOnly)
+        if len(dir_) == 0:
+            return
+        cwd = os.getcwd()
+        os.chdir(dir_)        
+        if not(ok):
+            name = "basic"
+        bintable.writeto(name + ".fits")
+        os.chdir(cwd)  
+
+
     def save_data(self):
         '''
         routine to save parameter fits to .fits file
@@ -1252,35 +1345,47 @@ class App(QtGui.QMainWindow):
         '''
         essentially a corner plot with marginals=True
         '''
+        #TODO: Not able to select non-parameterized pdf if fits performed
         basic_model = pm.Model()
         with basic_model:
-            choice, ok = qt.QInputDialog.getItem(self,"Which run?","choose a data set:",self.arviz.keys(),0,False)
-            if not(ok):
-                return
-            vals = az.summary(self.arviz[choice],round_to=5,stat_funcs=[conf_low,conf_high])#var_names?
-            az.rcParams['plot.max_subplots'] = 80
-            axes = az.plot_pair(self.arviz[choice],kind=['hexbin',"kde"],kde_kwargs={"fill_last":False},marginals=True,point_estimate="mean",marginal_kwargs={"quantiles":[0.16,0.5,0.84]},figsize=(len(vals['mean']),len(vals['mean'])))
-            for i in range(len(axes)):
-                axes[i][i].set_title(r'${0}={1}_{{{2}}}^{{{3}}}$'.format(vals['mean'].keys()[i],vals['mean'][i],vals['conf_low'][i]-vals['mean'][i],vals['conf_high'][i]-vals['mean'][i]))
-            if (choice.find('EW') != -1) or (choice.find('Voigt') != -1):    
-                fig2 = plt.figure()
-                ax2 = plt.axes()
-                y,x,_ = ax2.hist(self.pdfs['EWPDF'][0],bins=100,density=True)
-                #embed()
-                up = conf_high(self.pdfs['EWPDF'][0])
-                down = conf_low(self.pdfs['EWPDF'][0])
-                m = np.mean(self.pdfs['EWPDF'][0])
-                ax2.vlines(m,0,np.max(y),color='k')
-                ax2.text(np.mean(x) - np.std(x),0.8*np.max(y),r'${0}^{{{1}}}_{{{2}}}$'.format(m,up-m,down-m))
-                ax2.set_xlabel('EW')
-                fig3 = plt.figure()
-                ax3 = plt.axes()
-                fy,fx,_ = ax3.hist(self.pdfs['Flux'][0],bins=100,density=True)
-                fup = conf_high(self.pdfs['Flux'][0])
-                fdown = conf_low(self.pdfs['Flux'][0])
-                fm = np.mean(self.pdfs['Flux'][0])
-                ax3.vlines(fm,0,np.max(fy),color='k')
-                ax3.text(np.mean(fx)-np.std(fx),0.8*np.max(fy),r'${0}^{{{1}}}_{{{2}}}$'.format(fm,fup-fm,fdown-fm))
+            if len(self.arviz.keys()) > 0:
+                choice, ok = qt.QInputDialog.getItem(self,"Which run?","choose a data set:",self.arviz.keys(),0,False)
+                if not(ok):
+                    return
+                vals = az.summary(self.arviz[choice],round_to=5,stat_funcs=[conf_low,conf_high])#var_names?
+                az.rcParams['plot.max_subplots'] = 80
+                axes = az.plot_pair(self.arviz[choice],kind=['hexbin',"kde"],kde_kwargs={"fill_last":False},marginals=True,point_estimate="mean",marginal_kwargs={"quantiles":[0.16,0.5,0.84]},figsize=(len(vals['mean']),len(vals['mean'])))
+                for i in range(len(axes)):
+                    axes[i][i].set_title(r'${0}={1}_{{{2}}}^{{{3}}}$'.format(vals['mean'].keys()[i],vals['mean'][i],vals['conf_low'][i]-vals['mean'][i],vals['conf_high'][i]-vals['mean'][i]))
+                if (choice.find('EW') != -1) or (choice.find('Voigt') != -1):    
+                    fig2 = plt.figure()
+                    ax2 = plt.axes()
+                    y,x,_ = ax2.hist(self.pdfs['EWPDF'][0],bins=100,density=True)
+                    #embed()
+                    up = conf_high(self.pdfs['EWPDF'][0])
+                    down = conf_low(self.pdfs['EWPDF'][0])
+                    m = np.mean(self.pdfs['EWPDF'][0])
+                    ax2.vlines(m,0,np.max(y),color='k')
+                    ax2.text(np.mean(x) - np.std(x),0.8*np.max(y),r'${0}^{{{1}}}_{{{2}}}$'.format(m,up-m,down-m))
+                    ax2.set_xlabel('EW')
+                    fig3 = plt.figure()
+                    ax3 = plt.axes()
+                    fy,fx,_ = ax3.hist(self.pdfs['Flux'][0],bins=100,density=True)
+                    fup = conf_high(self.pdfs['Flux'][0])
+                    fdown = conf_low(self.pdfs['Flux'][0])
+                    fm = np.mean(self.pdfs['Flux'][0])
+                    ax3.vlines(fm,0,np.max(fy),color='k')
+                    ax3.text(np.mean(fx)-np.std(fx),0.8*np.max(fy),r'${0}^{{{1}}}_{{{2}}}$'.format(fm,fup-fm,fdown-fm))
+            else:
+                choice, ok = qt.QInputDialog.getItem(self,"Which run?","choose a data set:",self.pdfs.keys(),0,False)
+                fig1 = plt.figure()
+                ax1 = plt.axes()
+                y,x,_ = ax1.hist(self.pdfs[choice][0],bins=100,density=True)
+                up = conf_high(self.pdfs[choice][0])
+                down = conf_low(self.pdfs[choice][0])
+                m = np.mean(self.pdfs[choice][0])
+                ax1.vlines(m,0,np.max(y),color='k')
+                ax1.text(np.mean(x) - np.std(x),0.8*np.max(y),r'${0}^{{{1}}}_{{{2}}}$'.format(m,up-m,down-m))
             plt.show()
         del(basic_model)
 
@@ -1545,7 +1650,7 @@ class App(QtGui.QMainWindow):
             elif f == "2614_M1149_2.fits":
                 a.append(0.833111698664391)
             else:
-                a.append(0.533669386139336)
+                a.append(1.0)
         resdata = []
         new_grid = np.arange(3000,6000,2.18)
         count = 0

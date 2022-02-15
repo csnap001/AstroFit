@@ -46,4 +46,5 @@ def connect(self):
         self.extract1d.clicked.connect(self.Extract1d)
         self.upperlim.clicked.connect(self.upperLimit)
         self.specphotflux.clicked.connect(self.fileflux)
+        self.savespec.clicked.connect(self.save_spectrum)
         return
