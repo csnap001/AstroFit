@@ -1,6 +1,14 @@
 """
 Created Thursday 8th, 2019 by Christopher Snapp-Kolas
 
+#TODO: possible overhaul of the structure of the code. It seems like it would be better to set up "dock layers" where
+each layer is performing a specific task (i.e. dock 1-3 each are working on 1d spectra and dock 4 has a table open)
+Then for each layer displaying on the left-hand(or right?) side displaying the data files being used, fits performed
+and any additional elements relevant to the display. I think it would be best to create in place a folder that "saves"
+all this information from which the user can access. These files should be deleted upon shut-down of the layer.
+This list or lists would include the pickle fits, corner plots, and original fits files.
+
+
 TODO: add "clear screen" option for clearing displays
 TODO: Add threading of functions to allow continued functionality of other QtGui objects. Although there
 should be checks to ensure the user isn't overworking their computer.
@@ -812,7 +820,11 @@ class App(QtGui.QMainWindow):
                     cont_pdf = linear(maxwl,cont_params['m'],cont_params['b'])
                     #NOTE: this won't work if this wasn't done
                 elif curve == 'power':
-                    cont_pdf = Pow(maxwl,cont_params['amp'],cont_params['alpha'],cont_params['unity'])
+
+                    if 'cont_amp' not in cont_params.varnames:
+                        cont_pdf = Pow(maxwl,cont_params['amp'],cont_params['alpha'],cont_params['unity'])
+                    else:
+                        cont_pdf = Pow(maxwl,cont_params['cont_amp'],cont_params['alpha'],cont_params['unity'])
                     #NOTE: this presumes the naming convention for when just a continuum is fit and won't work
                     # otherwise
                 else:
@@ -837,11 +849,10 @@ class App(QtGui.QMainWindow):
                 for i,flux in enumerate(fluxes):
                     fflux = [f - cont_pdf for f in flux]
                     EW_pdf = np.trapz(fflux,x=finalwl,axis=0)/cont_pdf
-                #fflux = [flux - cont_pdf for flux in finalflux]#NOTE: first step in equivalent width determination
-                #EW_pdf = np.trapz(fflux,x=finalwl,axis=0)/cont_pdf
                 EW_pdf = EW_pdf.flatten()
                 EW = np.mean(EW_pdf)
                 self.pdfs['npEW'] = [EW_pdf,pd.core.series.Series([EW],index=["EW"])]
+                self.pdfs['Flux'] = [np.trapz(fflux,x=finalwl,axis=0).flatten(),pd.core.series.Series([np.mean(np.trapz(fflux,x=finalwl,axis=0))],index=['Flux'])]
                 pdf_err = np.std(EW_pdf)
                 err_list = np.array([(finalwl[i+1] - finalwl[i])/2 * np.sqrt(finalerr[i+1]**2 + finalerr[i]**2) for i in range(len(finalwl)-1)])
                 EWerr = np.sqrt(np.sum(err_list**2) + pdf_err**2)
@@ -1385,7 +1396,7 @@ class App(QtGui.QMainWindow):
                 down = conf_low(self.pdfs[choice][0])
                 m = np.mean(self.pdfs[choice][0])
                 ax1.vlines(m,0,np.max(y),color='k')
-                ax1.text(np.mean(x) - np.std(x),0.8*np.max(y),r'${0}^{{{1}}}_{{{2}}}$'.format(m,up-m,down-m))
+                ax1.text(np.mean(x) - np.std(x),0.8*np.max(y),r'${0}^{{{1}}}_{{{2}}}$'.format(m,up-m,down-m),fontsize=25)
             plt.show()
         del(basic_model)
 
@@ -1644,19 +1655,23 @@ class App(QtGui.QMainWindow):
         hdul = []
         a = []
         for f in files:
+            
             hdul.append(fits.open(f))
-            if f == "10013_M0717_1.fits":
-                a.append(0.544597953302009)
-            elif f == "2614_M1149_2.fits":
-                a.append(0.833111698664391)
+            if f.split('/')[-1] == "830_A1689_1.fits":
+                a.append(1.22)
+            elif f.split('/')[-1] == "830_A1689_3.fits":
+                a.append(1.24)
             else:
-                a.append(1.0)
+                a.append(1)
         resdata = []
         new_grid = np.arange(3000,6000,2.18)
         count = 0
+        print(a)
         for h in hdul:
             data = h[1].data
-            resdata.append(spectres(new_grid,data['wave'],a[count]*data['flux'],a[count]*1/np.sqrt(data['ivar'])))
+            try: resdata.append(spectres(new_grid,data['wave'],a[count]*data['flux'],a[count]*1/np.sqrt(data['ivar'])))
+            except KeyError:  resdata.append(spectres(new_grid,data['wave'],a[count]*data['flux'],a[count]*data['sig']))
+            else: pass
             count += 1
 
         ivar_new = np.array([i[1] for i in resdata])
