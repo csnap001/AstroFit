@@ -1657,10 +1657,10 @@ class App(QtGui.QMainWindow):
         for f in files:
             
             hdul.append(fits.open(f))
-            if f.split('/')[-1] == "830_A1689_1.fits":
-                a.append(1.22)
-            elif f.split('/')[-1] == "830_A1689_3.fits":
-                a.append(1.24)
+            if f.split('/')[-1] == "1212_M114":
+                a.append(1.28)
+            elif f.split('/')[-1] == "1212_M1":
+                a.append(1.12)
             else:
                 a.append(1)
         resdata = []
