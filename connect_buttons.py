@@ -47,4 +47,6 @@ def connect(self):
         self.upperlim.clicked.connect(self.upperLimit)
         self.specphotflux.clicked.connect(self.fileflux)
         self.savespec.clicked.connect(self.save_spectrum)
+        self.picplot.clicked.connect(self.pickle_plot)
+        self.S_to_N.clicked.connect(self.S_N)
         return

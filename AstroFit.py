@@ -6,7 +6,10 @@ each layer is performing a specific task (i.e. dock 1-3 each are working on 1d s
 Then for each layer displaying on the left-hand(or right?) side displaying the data files being used, fits performed
 and any additional elements relevant to the display. I think it would be best to create in place a folder that "saves"
 all this information from which the user can access. These files should be deleted upon shut-down of the layer.
-This list or lists would include the pickle fits, corner plots, and original fits files.
+This list or lists would include the pickle fits, corner plots, and original fits files. Perhaps place user adjustable
+slots on the righthand side (i.e. What parameterization, how many iterations of MCMC, number of masking regions, etc.).
+buttons, or other operations, relevant to that kind of object (i.e. 1d spectra have differernt functions than 2d)
+can perhaps go above or below the plot.
 
 
 TODO: add "clear screen" option for clearing displays
@@ -14,9 +17,6 @@ TODO: Add threading of functions to allow continued functionality of other QtGui
 should be checks to ensure the user isn't overworking their computer.
 TODO: Add progress bar for fits: self.progress = QtGui.ProgressBar(self) -> self.progress.setValue(**some increasing number**)
 This is a difficult task, as pymc3 holds all this info internally and doesn't appear to allow for access
-TODO: 2 primary functions need to be built. 1: need non-parameterized equivalent width determination
-2: Need line center determination. use paper that fred sent (find the first moment)
-generally speaking there is more to be done than this, but this will be sufficient for now
 TODO: Re-organize storage of data. There should be meta-data fxns that feed to data analysis fxns
 Should write out and organize my thoughts on this. 
 TODO: Should save data to files as well (.dat?), currently using pickle, works for me but not generally what people
@@ -50,12 +50,15 @@ Created Slider class to handle this. Connect Slider widget to update plot with g
 function. example: Slide = Slider(lower_bound,Upper_bound), Slide.valueChanged.connect(smooth_plot)
 
 TODO: Add in ability to remove various added plotItems (i.e. fits and whatnot), there exists a 
-removeItem(item) function
+removeItem(item) function. Would be nice to hold these items in memory and allow the user to add
+and remove at will.
 
 TODO: Grab names from table (all keywords) and allow user to select and then move view to there
-and highlight
+and highlight. Would be nice to make operations on table elements possible. Both the ability to
+edit in place, and the ability to change entire rows or columns, or perform operations between 
+rows and columns.
 
-Module for GUI spectroscopic fitting environment based on pymc3
+Module for GUI spectroscopic fitting environment based on pymc3, pyqtgraph,
 and astropy. (Possibly, desired) This module will also have basic image arithmatic capabilities.
 
 Meta data:
@@ -64,6 +67,7 @@ Class Functions:
 
 """
 
+from re import L
 import PyQt5.QtWidgets as qt
 from astropy.io.fits.hdu.image import ImageHDU
 from astropy.io.fits.hdu.table import BinTableHDU, TableHDU
@@ -148,6 +152,9 @@ def gauss0(x,A0,x0,b0):
 def polygauss(x,Ag,xg,bg,b,m):
     return polynomial(x,b,m) + gauss0(x,Ag,xg,bg)
 
+def piece(x,b,xb,xc,xg,A0,Ag,a,bg,m):
+    return pm.math.switch(x <= xb,polygauss(x,Ag,xg,bg,b,m),Pow(x,A0,a,xc)).eval()
+
 @theano.compile.ops.as_op(itypes=[t.dvector, t.dscalar,t.dscalar, t.dscalar,t.dscalar, t.dscalar,t.dscalar, t.dscalar,t.dscalar, t.dscalar],otypes=[t.dvector])
 @dispatch(object,object,object,object,object,object,object,object,object,object)
 def piecewise(x,xb,xc,xg,A0,Ag,a,bg,b,m):
@@ -181,11 +188,6 @@ def Voigt(x,A0,Nl,x0,sig):
 def lorentzian(x,x0,a,gam):
     return abs(a)*gam**2/(gam**2 + (x-x0)**2)
 
-def hailmary(x,x0,a,b,tau):
-    return (a*(x/x0) + b)*np.exp(-(x-x0)**2/tau)
-
-def VGpow(x,Av,Ag,Ac,xg,xc,p,sig,b,tau):
-    return Powpgauss(x,Ag,xg,sig,Ac,p,xc) + hailmary(x,xc,Av,b,tau)
 
 def linear(x,a,b):
     return a*x + b
@@ -815,20 +817,10 @@ class App(QtGui.QMainWindow):
                 z, ok = qt.QInputDialog.getDouble(self,"Get redshift","z:",2.0,0.0,10.0,10)
                 maxwl = 1215.56845*(1+z)
                 print(maxwl)
-                curve, ok = qt.QInputDialog.getItem(self,"Continuum","line or power law?:",['line','power'],0,False)
-                if curve == 'line':
-                    cont_pdf = linear(maxwl,cont_params['m'],cont_params['b'])
-                    #NOTE: this won't work if this wasn't done
-                elif curve == 'power':
-
-                    if 'cont_amp' not in cont_params.varnames:
-                        cont_pdf = Pow(maxwl,cont_params['amp'],cont_params['alpha'],cont_params['unity'])
-                    else:
-                        cont_pdf = Pow(maxwl,cont_params['cont_amp'],cont_params['alpha'],cont_params['unity'])
-                    #NOTE: this presumes the naming convention for when just a continuum is fit and won't work
-                    # otherwise
+                if 'cont_amp' not in cont_params.varnames:
+                    cont_pdf = Pow(maxwl,cont_params['amp'],cont_params['alpha'],cont_params['unity'])
                 else:
-                    return
+                    cont_pdf = Pow(maxwl,cont_params['cont_amp'],cont_params['alpha'],cont_params['unity'])
                 left = qt.QInputDialog.getDouble(self,"left","What velocity left maximum?: ",0,False)
                 right = qt.QInputDialog.getDouble(self,"right","What velocity right maximum?: ",0,False)
                 newMask = (finalwl > maxwl*(1-(left[0]/3e5))) & (finalwl < maxwl*(1+(right[0]/3e5)))
@@ -846,13 +838,17 @@ class App(QtGui.QMainWindow):
                 #Start EW determination
                 fluxes = np.random.normal(finalflux,scale=finalerr,size=(1000,len(finalflux)))
                 EW_pdf = np.zeros((len(fluxes),len(cont_pdf)))
-                for i,flux in enumerate(fluxes):
+                for i,flux in enumerate(fluxes):#TODO: check logic of this. seems flaw
                     fflux = [f - cont_pdf for f in flux]
-                    EW_pdf = np.trapz(fflux,x=finalwl,axis=0)/cont_pdf
+                    EW_pdf[i] = np.trapz(fflux,x=finalwl,axis=0)/cont_pdf
                 EW_pdf = EW_pdf.flatten()
                 EW = np.mean(EW_pdf)
                 self.pdfs['npEW'] = [EW_pdf,pd.core.series.Series([EW],index=["EW"])]
-                self.pdfs['Flux'] = [np.trapz(fflux,x=finalwl,axis=0).flatten(),pd.core.series.Series([np.mean(np.trapz(fflux,x=finalwl,axis=0))],index=['Flux'])]
+                if 'm' in cont_params.varnames: flux_cont = linear(maxwl,cont_params['m'],cont_params['b'])
+                else: flux_cont = cont_pdf
+                for i,flux in enumerate(fluxes):
+                    actflux = [f - flux_cont for f in flux]
+                self.pdfs['Flux'] = [np.trapz(actflux,x=finalwl,axis=0).flatten(),pd.core.series.Series([np.mean(np.trapz(fflux,x=finalwl,axis=0))],index=['Flux'])]
                 pdf_err = np.std(EW_pdf)
                 err_list = np.array([(finalwl[i+1] - finalwl[i])/2 * np.sqrt(finalerr[i+1]**2 + finalerr[i]**2) for i in range(len(finalwl)-1)])
                 EWerr = np.sqrt(np.sum(err_list**2) + pdf_err**2)
@@ -1243,6 +1239,65 @@ class App(QtGui.QMainWindow):
         self.arviz[name] = trace 
         self.plt[plt_name].plot(data[0].getData()[0],cont*func(data[0].getData()[0],*vals['mean']),pen=pen)
         del(basic_model)
+
+    def S_N(self):
+        choice, ok = qt.QInputDialog.getItem(self,"Which spectrum?","Choose data set:",self.names1d,0,False)
+        if not(ok):
+            qt.QMessageBox.about(self,"Not checking","Chose no data, not fitting.")
+            return
+        dat_choice = self.names1d.index(choice)
+        data = self.plt[dat_choice].listDataItems()
+        check = [self.regPlot[i].getViewBox().viewRange()[0][0] for i in np.arange(len(self.regPlot))]
+        reg, ok = qt.QInputDialog.getItem(self,"Choose a region","Which plot?:",np.array(check,str),0,False)#TODO: allow for multiple regions? or only abs masking?
+        if not(ok):
+            qt.QMessageBox.about(self,"Not Fitting","Do not currently support no region choice")
+            return
+        mask_choice = check.index(float(reg))
+        lr = self.lrs[mask_choice].getRegion()
+        if len(data) > 0:
+            wl = data[0].getData()[0]
+            flux = data[0].getData()[1]
+            err = data[1].getData()[1]
+            mask = (wl[:-1] > lr[0]) & (wl[:-1] < lr[1])
+            finalflux = flux[mask]
+            finalwl = wl[:-1][mask]
+            finalerr = err[mask]
+            S_N_perpix = np.mean(finalflux/finalerr)
+            totflux = np.sum(finalflux)
+            toterr = np.sqrt(np.sum(finalerr**2))
+            qt.QMessageBox.about(self,"S/N ratio","S/N per wavelength bin: {0}. S/N total {1}".format(S_N_perpix,totflux/toterr))
+
+    
+    def pickle_plot(self):
+        basic_model = pm.Model()
+        with basic_model:
+            choice, ok = qt.QInputDialog.getItem(self,"Which to fit","Choose data set:",self.names1d,0,False)
+            if not(ok):
+                qt.QMessageBox.about(self,"Not Fitting","Chose no data, not fitting.")
+                return
+            options = qt.QFileDialog.Options()
+            options |= qt.QFileDialog.DontUseNativeDialog
+            pick,ok = qt.QFileDialog.getOpenFileName(self,"QFileDialog.getOpenFileName()","","pickles (*.pkl);;All Files (*)",options = options) 
+            dat_choice = self.names1d.index(choice)
+            data = self.plt[dat_choice].listDataItems()
+            cont_params = pd.read_pickle(pick)
+            vals = az.summary(cont_params,round_to=10)
+            curve, ok = qt.QInputDialog.getItem(self,"what kind of pickle?","Choose curve:",['gauss','voigt','power','linear','polynomial'],0,False)
+            if curve == 'gauss':
+                func = Powpgauss
+            elif curve == 'voigt':
+                #TODO: this doesn't really work for the voigt profile
+                func = piece
+            elif curve == 'power':
+                func = Pow
+            elif curve == 'linear':
+                func = linear
+            elif curve == 'polynomial':
+                func = polynomial
+            pen = (0,100,0)
+            embed()
+            self.plt[dat_choice].plot(data[0].getData()[0],func(data[0].getData()[0],*vals['mean']),pen=pen)
+        
         
     #TODO: Should consider allowing user to adjust parameterization
     # but should make this a visual thing like a slider bar (It would be helpful to output the sigma

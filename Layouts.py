@@ -46,3 +46,5 @@ def Lay(self):
         self.toolbar.addWidget(self.upperlim)
         self.toolbar.addWidget(self.specphotflux)
         self.toolbar.addWidget(self.savespec)
+        self.toolbar.addWidget(self.picplot)
+        self.toolbar.addWidget(self.S_to_N)
