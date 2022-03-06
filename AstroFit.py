@@ -828,17 +828,17 @@ class App(QtGui.QMainWindow):
                 finalflux = finalflux[newMask]
                 finalwl = finalwl[newMask]
                 finalerr = finalerr[newMask]
-                #TODO:fillbetween?
                 Limit_curve_top = pg.PlotCurveItem(finalwl,finalflux)
-                Limit_curve_bottom = pg.PlotCurveItem(finalwl,finalerr)
+                Limit_curve_bottom = pg.PlotCurveItem(finalwl,finalerr)#TODO: how to make fillbetween step?
                 self.fill = pg.FillBetweenItem(Limit_curve_bottom,Limit_curve_top,brush=(0,100,0,150))
                 self.plt[dat_choice].addItem(self.fill)
 
 
                 #Start EW determination
-                fluxes = np.random.normal(finalflux,scale=finalerr,size=(1000,len(finalflux)))
+                fluxes = np.random.normal(finalflux,scale=finalerr,size=(1000,len(finalflux)))#creating 1000 spectra according to distribution from fluxerr
+                #This allows the uncertainty in the flux measurements to affect the EW distribution
                 EW_pdf = np.zeros((len(fluxes),len(cont_pdf)))
-                for i,flux in enumerate(fluxes):#TODO: check logic of this. seems flaw
+                for i,flux in enumerate(fluxes):#TODO: check logic of this. seems flawed
                     fflux = [f - cont_pdf for f in flux]
                     EW_pdf[i] = np.trapz(fflux,x=finalwl,axis=0)/cont_pdf
                 EW_pdf = EW_pdf.flatten()
@@ -846,9 +846,14 @@ class App(QtGui.QMainWindow):
                 self.pdfs['npEW'] = [EW_pdf,pd.core.series.Series([EW],index=["EW"])]
                 if 'm' in cont_params.varnames: flux_cont = linear(maxwl,cont_params['m'],cont_params['b'])
                 else: flux_cont = cont_pdf
+                actflux = np.zeros((len(fluxes),len(flux_cont)))
+                #embed()
                 for i,flux in enumerate(fluxes):
-                    actflux = [f - flux_cont for f in flux]
-                self.pdfs['Flux'] = [np.trapz(actflux,x=finalwl,axis=0).flatten(),pd.core.series.Series([np.mean(np.trapz(fflux,x=finalwl,axis=0))],index=['Flux'])]
+                    tempflux = []
+                    for f in flux:
+                        tempflux.append(f-flux_cont)
+                    actflux[i] = np.trapz(tempflux,x=finalwl,axis=0)
+                self.pdfs['Flux'] = [actflux.flatten(),pd.core.series.Series([np.mean(actflux.flatten())],index=['Flux'])]
                 pdf_err = np.std(EW_pdf)
                 err_list = np.array([(finalwl[i+1] - finalwl[i])/2 * np.sqrt(finalerr[i+1]**2 + finalerr[i]**2) for i in range(len(finalwl)-1)])
                 EWerr = np.sqrt(np.sum(err_list**2) + pdf_err**2)
@@ -1446,10 +1451,12 @@ class App(QtGui.QMainWindow):
                 choice, ok = qt.QInputDialog.getItem(self,"Which run?","choose a data set:",self.pdfs.keys(),0,False)
                 fig1 = plt.figure()
                 ax1 = plt.axes()
-                y,x,_ = ax1.hist(self.pdfs[choice][0],bins=100,density=True)
-                up = conf_high(self.pdfs[choice][0])
-                down = conf_low(self.pdfs[choice][0])
-                m = np.mean(self.pdfs[choice][0])
+                pandadat = pd.DataFrame(self.pdfs[choice][0])#TODO: dataframes are much faster, good idea to
+                #port all math into pandas dataframes
+                y,x,_ = ax1.hist(pandadat,bins=100,density=True)
+                up = pandadat.quantile(q=0.841,interpolation='linear')[0]
+                down = pandadat.quantile(q=0.159,interpolation='linear')[0]
+                m = pandadat.quantile(q=0.5,interpolation='linear')[0]
                 ax1.vlines(m,0,np.max(y),color='k')
                 ax1.text(np.mean(x) - np.std(x),0.8*np.max(y),r'${0}^{{{1}}}_{{{2}}}$'.format(m,up-m,down-m),fontsize=25)
             plt.show()
