@@ -11,6 +11,9 @@ slots on the righthand side (i.e. What parameterization, how many iterations of 
 buttons, or other operations, relevant to that kind of object (i.e. 1d spectra have differernt functions than 2d)
 can perhaps go above or below the plot.
 
+#TODO:break into sections. 1d spectra (and functions), 2d spectra (and functions), and table (with plotting/data manipulation
+# functions)
+
 
 TODO: add "clear screen" option for clearing displays
 TODO: Add threading of functions to allow continued functionality of other QtGui objects. Although there
