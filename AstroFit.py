@@ -86,7 +86,6 @@ import multiprocessing as multi
 import numpy as np
 import sys
 
-from theano.tensor.sharedvar import TensorSharedVariable
 import create_buttons as cb
 import connect_buttons as conb
 from Layouts import Lay
