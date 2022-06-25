@@ -619,10 +619,15 @@ class App(QtGui.QMainWindow):
                 x, ok = qt.QInputDialog.getItem(self,"data","Choose your x axis:",data.keys(),0,False)
                 y, ok = qt.QInputDialog.getItem(self,"data","Choose your y axis:",data.keys(),0,False)
                 err, ok = qt.QInputDialog.getItem(self,"data","Choose your err axis:",data.keys(),0,False)
+                data[x][np.isnan(data[x])] = 0e40
+                data[y][np.isnan(data[y])] = 0e40
+                data[err][np.isnan(data[err])] = 0e40
                 x = data[x]
                 y = data[y]
                 err = data[err]
-                if (x is not None) and (y is not None): self.updatePlot(count,x,y,err)
+                if (x is not None) and (y is not None):
+                    embed()
+                    self.updatePlot(count,x,y,err)
                 else: qt.QMessageBox.about(self,"Showing {0},{1}".format(x,y),"One data set is not valid")
                 Happy, ok = qt.QInputDialog.getItem(self,"Good","Happy?:",["True","False"],0,False)
                 if Happy == "True":
@@ -648,11 +653,14 @@ class App(QtGui.QMainWindow):
             self.headerDisplay(hdul)
             #embed()
             while True:
-                E, ok = qt.QInputDialog.getItem(self,"Which spectrum?","choose extension",[str(i) for i in np.arange(len(data)+1)],0,False)
+                E, ok = qt.QInputDialog.getItem(self,"Which spectrum?","choose extension",[str(i) for i in np.arange(len(data))],0,False)
                 E = int(E)
                 x, ok = qt.QInputDialog.getItem(self,"data","Choose your x axis:",[data[E].columns[i].name for i in range(len(data[E].columns))],0,False)
                 y, ok = qt.QInputDialog.getItem(self,"data","Choose your y axis:",[data[E].columns[i].name for i in range(len(data[E].columns))],0,False)
                 err, ok = qt.QInputDialog.getItem(self,"data","Choose your err axis:",[data[E].columns[i].name for i in range(len(data[E].columns))],0,False)
+                data[E][x][np.isnan(data[E][x])] = 0
+                data[E][y][np.isnan(data[E][y])] = 0
+                data[E][err][np.isnan(data[E][err])] = 0
                 x = data[E][x]
                 y = data[E][y]
                 err = data[E][err]
