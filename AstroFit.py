@@ -625,6 +625,7 @@ class App(QtGui.QMainWindow):
                 x = data[x]
                 y = data[y]
                 err = data[err]
+                embed()
                 if (x is not None) and (y is not None):
                     self.updatePlot(count,x,y,err)
                 else: qt.QMessageBox.about(self,"Showing {0},{1}".format(x,y),"One data set is not valid")
