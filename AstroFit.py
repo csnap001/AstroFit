@@ -596,6 +596,7 @@ class App(QtGui.QMainWindow):
         pen = pg.mkPen(color='b')
         self.plt[count].addLegend()
         wl = np.append(wl, np.mean(np.diff(wl)) + wl[-1])
+        embed()
         self.flux.append(self.plt[count].plot(wl,flux,pen=pen,name='Flux',stepMode=True))
         self.err.append(self.plt[count].plot(wl,err,name='Error',stepMode=True))
     
@@ -625,7 +626,6 @@ class App(QtGui.QMainWindow):
                 x = data[x]
                 y = data[y]
                 err = data[err]
-                embed()
                 if (x is not None) and (y is not None):
                     self.updatePlot(count,x,y,err)
                 else: qt.QMessageBox.about(self,"Showing {0},{1}".format(x,y),"One data set is not valid")
