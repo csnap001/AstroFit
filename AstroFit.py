@@ -596,7 +596,6 @@ class App(QtGui.QMainWindow):
         pen = pg.mkPen(color='b')
         self.plt[count].addLegend()
         wl = np.append(wl, np.mean(np.diff(wl)) + wl[-1])
-        embed()
         self.flux.append(self.plt[count].plot(wl,flux,pen=pen,name='Flux',stepMode=True))
         self.err.append(self.plt[count].plot(wl,err,name='Error',stepMode=True))
     
