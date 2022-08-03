@@ -1925,7 +1925,9 @@ class App(QtGui.QMainWindow):
             qt.QMessageBox.about(self,"Error","Data has {0} dimensions but images require 2 dimensions".format(data.ndim))
             self.imv.close()
             return
-        self.imv.setImage(data,levels=(-10,10))
+        mean = np.mean(data)
+        sd = np.std(data)    
+        self.imv.setImage(data,levels=(mean - 3*sd,mean + 3*sd))
         self.imv.setCursor(QtCore.Qt.CrossCursor)
         self.isigprox = pg.SignalProxy(self.imv.scene.sigMouseMoved,rateLimit=60,slot=self.imageHoverEvent)
     
