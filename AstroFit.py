@@ -72,6 +72,7 @@ Class Functions:
 
 from re import L
 import PyQt5.QtWidgets as qt
+from itertools import cycle
 from astropy.io.fits.hdu.image import ImageHDU
 from astropy.io.fits.hdu.table import BinTableHDU, TableHDU
 from pyqtgraph.Qt import QtCore,QtGui
@@ -361,7 +362,7 @@ class App(QtGui.QMainWindow):
         if len(self.plt) > 0:
             self.dplot.addWidget(self.slide_smooth,row=0,col=1)
             self.slide_smooth.slider.valueChanged.connect(self.smooth_update)
-            self.memory.append(self.plt[0].listDataItems())
+            self.memory.append(self.plt[0].listDataItems())#TODO: shouldn't this go before any smoothing?
     #TODO: generalize to multiplots
 
     def updateLR(self):
@@ -396,7 +397,13 @@ class App(QtGui.QMainWindow):
             self.regPlot[len(self.regPlot)-1].plot(data[0],data[1],color='w',name='Flux',stepMode=True)
             self.regPlot[len(self.regPlot)-1].plot(data[0],data[2],color='red',name='Error',stepMode=True)
             self.regPlot[len(self.regPlot)-1].sigXRangeChanged.connect(self.updateLR)
-
+    #TODO: update the structure of GUI. Each plot should open new tab
+    # This should make multiplotting on single graph more fluid as well
+    # as region connections. Already doing something like this with 2D, sort of.
+    # Although any child plots should be in the same tab. Like plots of linear
+    # regions should be underneath plot of full data. similarly, plots of slices 
+    # of 2d data should be on the same page. This will hopefully open up greater 
+    # functionality for manipulation of table data into plots.
     def addPlot(self,name):
         #TODO:need to figure out how to handle placement after removing plots
         #Likely better to change this to tabs instead of multiple plots in a 
@@ -711,11 +718,16 @@ class App(QtGui.QMainWindow):
     def updateLRplot(self):
         for i in range(len(self.regPlot)):
             if self.lrs[i].sigRegionChanged:
+                self.regPlot[i].addLegend()
                 self.regPlot[i].setXRange(*self.lrs[i].getRegion(),padding=0)
                 self.regPlot[i].setYRange(self.yrange[0],self.yrange[1],padding=0)
                 plots = self.regPlot[i].listDataItems()
-                plots[0].setPen('w')
-                plots[1].setPen('r')
+                colors = ['w','r','b','g','purple','cyan']
+                cyc = cycle(colors)
+                #TODO: first run of code doesn't cycle through colors.
+                for i in range(len(plots)):
+                    plots[i].setPen(next(cyc))
+                
                 #TODO: make these colors user defined. create some variable that 
                 # the user can update, i.e. self.LRerrColor and self.LRfluxColor
 
@@ -872,9 +884,6 @@ class App(QtGui.QMainWindow):
         else:
             qt.QMessageBox.about(self,"No data","No data to measure")
 
-    #TODO: create something for grabbing filters (a couple hst for now) and 
-    #calculating the ratio between spectra and photometry to estimate 
-    #slitloss corrections
 
     def LineCenter(self):
         '''
@@ -1134,6 +1143,8 @@ class App(QtGui.QMainWindow):
             
             #Priors on model
             #NOTE: these are elements in vals in the order they appear in the code
+            #TODO: how to run this when there isn't an error spectrum? generally shouldn't require error spectrum
+            # some fits won't require the existence of an error spectrum.
             if name == "continuum":
                 if cname == "Power Law":
                     amp = pm.TruncatedNormal("amp",mu=(bounds[0][0]+bounds[0][1])/2,sigma=0.8*(bounds[0][1]-bounds[0][0]),testval=(bounds[0][0]+bounds[0][1])/2,lower=0.0000001)
