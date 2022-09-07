@@ -1,15 +1,25 @@
 """
 Created Thursday 8th, 2019 by Christopher Snapp-Kolas
 
-TODO: Rename the file so that it better describes its use.
+#TODO: possible overhaul of the structure of the code. It seems like it would be better to set up "dock layers" where
+each layer is performing a specific task (i.e. dock 1-3 each are working on 1d spectra and dock 4 has a table open)
+Then for each layer displaying on the left-hand(or right?) side displaying the data files being used, fits performed
+and any additional elements relevant to the display. I think it would be best to create in place a folder that "saves"
+all this information from which the user can access. These files should be deleted upon shut-down of the layer.
+This list or lists would include the pickle fits, corner plots, and original fits files. Perhaps place user adjustable
+slots on the righthand side (i.e. What parameterization, how many iterations of MCMC, number of masking regions, etc.).
+buttons, or other operations, relevant to that kind of object (i.e. 1d spectra have differernt functions than 2d)
+can perhaps go above or below the plot.
+
+#TODO:break into sections. 1d spectra (and functions), 2d spectra (and functions), and table (with plotting/data manipulation
+# functions)
+
+
 TODO: add "clear screen" option for clearing displays
 TODO: Add threading of functions to allow continued functionality of other QtGui objects. Although there
 should be checks to ensure the user isn't overworking their computer.
 TODO: Add progress bar for fits: self.progress = QtGui.ProgressBar(self) -> self.progress.setValue(**some increasing number**)
 This is a difficult task, as pymc3 holds all this info internally and doesn't appear to allow for access
-TODO: 2 primary functions need to be built. 1: need non-parameterized equivalent width determination
-2: Need line center determination. use paper that fred sent (find the first moment)
-generally speaking there is more to be done than this, but this will be sufficient for now
 TODO: Re-organize storage of data. There should be meta-data fxns that feed to data analysis fxns
 Should write out and organize my thoughts on this. 
 TODO: Should save data to files as well (.dat?), currently using pickle, works for me but not generally what people
@@ -43,12 +53,15 @@ Created Slider class to handle this. Connect Slider widget to update plot with g
 function. example: Slide = Slider(lower_bound,Upper_bound), Slide.valueChanged.connect(smooth_plot)
 
 TODO: Add in ability to remove various added plotItems (i.e. fits and whatnot), there exists a 
-removeItem(item) function
+removeItem(item) function. Would be nice to hold these items in memory and allow the user to add
+and remove at will.
 
 TODO: Grab names from table (all keywords) and allow user to select and then move view to there
-and highlight
+and highlight. Would be nice to make operations on table elements possible. Both the ability to
+edit in place, and the ability to change entire rows or columns, or perform operations between 
+rows and columns.
 
-Module for GUI spectroscopic fitting environment based on pymc3
+Module for GUI spectroscopic fitting environment based on pymc3, pyqtgraph,
 and astropy. (Possibly, desired) This module will also have basic image arithmatic capabilities.
 
 Meta data:
@@ -57,7 +70,9 @@ Class Functions:
 
 """
 
+from re import L
 import PyQt5.QtWidgets as qt
+from itertools import cycle
 from astropy.io.fits.hdu.image import ImageHDU
 from astropy.io.fits.hdu.table import BinTableHDU, TableHDU
 from pyqtgraph.Qt import QtCore,QtGui
@@ -72,7 +87,6 @@ import multiprocessing as multi
 import numpy as np
 import sys
 
-from theano.tensor.sharedvar import TensorSharedVariable
 import create_buttons as cb
 import connect_buttons as conb
 from Layouts import Lay
@@ -141,6 +155,9 @@ def gauss0(x,A0,x0,b0):
 def polygauss(x,Ag,xg,bg,b,m):
     return polynomial(x,b,m) + gauss0(x,Ag,xg,bg)
 
+def piece(x,b,xb,xc,xg,A0,Ag,a,bg,m):
+    return pm.math.switch(x <= xb,polygauss(x,Ag,xg,bg,b,m),Pow(x,A0,a,xc)).eval()
+
 @theano.compile.ops.as_op(itypes=[t.dvector, t.dscalar,t.dscalar, t.dscalar,t.dscalar, t.dscalar,t.dscalar, t.dscalar,t.dscalar, t.dscalar],otypes=[t.dvector])
 @dispatch(object,object,object,object,object,object,object,object,object,object)
 def piecewise(x,xb,xc,xg,A0,Ag,a,bg,b,m):
@@ -174,11 +191,6 @@ def Voigt(x,A0,Nl,x0,sig):
 def lorentzian(x,x0,a,gam):
     return abs(a)*gam**2/(gam**2 + (x-x0)**2)
 
-def hailmary(x,x0,a,b,tau):
-    return (a*(x/x0) + b)*np.exp(-(x-x0)**2/tau)
-
-def VGpow(x,Av,Ag,Ac,xg,xc,p,sig,b,tau):
-    return Powpgauss(x,Ag,xg,sig,Ac,p,xc) + hailmary(x,xc,Av,b,tau)
 
 def linear(x,a,b):
     return a*x + b
@@ -350,7 +362,7 @@ class App(QtGui.QMainWindow):
         if len(self.plt) > 0:
             self.dplot.addWidget(self.slide_smooth,row=0,col=1)
             self.slide_smooth.slider.valueChanged.connect(self.smooth_update)
-            self.memory.append(self.plt[0].listDataItems())
+            self.memory.append(self.plt[0].listDataItems())#TODO: shouldn't this go before any smoothing?
     #TODO: generalize to multiplots
 
     def updateLR(self):
@@ -385,7 +397,13 @@ class App(QtGui.QMainWindow):
             self.regPlot[len(self.regPlot)-1].plot(data[0],data[1],color='w',name='Flux',stepMode=True)
             self.regPlot[len(self.regPlot)-1].plot(data[0],data[2],color='red',name='Error',stepMode=True)
             self.regPlot[len(self.regPlot)-1].sigXRangeChanged.connect(self.updateLR)
-
+    #TODO: update the structure of GUI. Each plot should open new tab
+    # This should make multiplotting on single graph more fluid as well
+    # as region connections. Already doing something like this with 2D, sort of.
+    # Although any child plots should be in the same tab. Like plots of linear
+    # regions should be underneath plot of full data. similarly, plots of slices 
+    # of 2d data should be on the same page. This will hopefully open up greater 
+    # functionality for manipulation of table data into plots.
     def addPlot(self,name):
         #TODO:need to figure out how to handle placement after removing plots
         #Likely better to change this to tabs instead of multiple plots in a 
@@ -560,7 +578,9 @@ class App(QtGui.QMainWindow):
         newT.write('Slitloss.fits',format='fits')           
     
     def table_create(self,fileName=""):
-        
+        #TODO: should add in capabilities such as table modification
+        # that can be written to a new fits file. Would also be nice
+        # if users could do calculations directly from the table.
         self.table.clear()
         fits = fileName.find(".fits")
         dat = fileName.find(".dat")
@@ -606,10 +626,14 @@ class App(QtGui.QMainWindow):
                 x, ok = qt.QInputDialog.getItem(self,"data","Choose your x axis:",data.keys(),0,False)
                 y, ok = qt.QInputDialog.getItem(self,"data","Choose your y axis:",data.keys(),0,False)
                 err, ok = qt.QInputDialog.getItem(self,"data","Choose your err axis:",data.keys(),0,False)
+                data[x][np.isnan(data[x])] = 0e40
+                data[y][np.isnan(data[y])] = 0e40
+                data[err][np.isnan(data[err])] = 0e40
                 x = data[x]
                 y = data[y]
                 err = data[err]
-                if (x is not None) and (y is not None): self.updatePlot(count,x,y,err)
+                if (x is not None) and (y is not None):
+                    self.updatePlot(count,x,y,err)
                 else: qt.QMessageBox.about(self,"Showing {0},{1}".format(x,y),"One data set is not valid")
                 Happy, ok = qt.QInputDialog.getItem(self,"Good","Happy?:",["True","False"],0,False)
                 if Happy == "True":
@@ -635,11 +659,14 @@ class App(QtGui.QMainWindow):
             self.headerDisplay(hdul)
             #embed()
             while True:
-                E, ok = qt.QInputDialog.getItem(self,"Which spectrum?","choose extension",[str(i) for i in np.arange(len(data)+1)],0,False)
+                E, ok = qt.QInputDialog.getItem(self,"Which spectrum?","choose extension",[str(i) for i in np.arange(len(data))],0,False)
                 E = int(E)
                 x, ok = qt.QInputDialog.getItem(self,"data","Choose your x axis:",[data[E].columns[i].name for i in range(len(data[E].columns))],0,False)
                 y, ok = qt.QInputDialog.getItem(self,"data","Choose your y axis:",[data[E].columns[i].name for i in range(len(data[E].columns))],0,False)
                 err, ok = qt.QInputDialog.getItem(self,"data","Choose your err axis:",[data[E].columns[i].name for i in range(len(data[E].columns))],0,False)
+                data[E][x][np.isnan(data[E][x])] = 0
+                data[E][y][np.isnan(data[E][y])] = 0
+                data[E][err][np.isnan(data[E][err])] = 0
                 x = data[E][x]
                 y = data[E][y]
                 err = data[E][err]
@@ -671,11 +698,14 @@ class App(QtGui.QMainWindow):
             name, ok = qt.QInputDialog.getItem(self,"data","Which data element?:",data_names.keys(),0,False)
             if not(ok):
                 qt.QMessageBox.about(self,"No operation?","No data element was chosen")
-            op, ok = qt.QInputDialog.getItem(self,"what Math?","What operation would you like to perform",["invert","square root"],0,False)
+            op, ok = qt.QInputDialog.getItem(self,"what Math?","What operation would you like to perform",["invert","square root","scalar multiplication"],0,False)
             if op == "invert":
                 data_names[name] = 1/data_names[name]
             if op == "square root":
                 data_names[name] = np.sqrt(data_names[name])
+            if op == "scalar multiplication":
+                scalar,_ = qt.QInputDialog.getDouble(self,"Scalar Multiplication","What value?",0,-1e200,1e200,10)
+                data_names[name] = data_names[name]*scalar
 
             self.plt[dat_choice].clear()
             self.flux[dat_choice] = self.plt[dat_choice].plot(data_names['wl'],data_names['flux'],pen='b',stepMode=True)
@@ -688,11 +718,16 @@ class App(QtGui.QMainWindow):
     def updateLRplot(self):
         for i in range(len(self.regPlot)):
             if self.lrs[i].sigRegionChanged:
+                self.regPlot[i].addLegend()
                 self.regPlot[i].setXRange(*self.lrs[i].getRegion(),padding=0)
                 self.regPlot[i].setYRange(self.yrange[0],self.yrange[1],padding=0)
                 plots = self.regPlot[i].listDataItems()
-                plots[0].setPen('w')
-                plots[1].setPen('r')
+                colors = ['w','r','b','g','purple','cyan']
+                cyc = cycle(colors)
+                #TODO: first run of code doesn't cycle through colors.
+                for i in range(len(plots)):
+                    plots[i].setPen(next(cyc))
+                
                 #TODO: make these colors user defined. create some variable that 
                 # the user can update, i.e. self.LRerrColor and self.LRfluxColor
 
@@ -744,7 +779,11 @@ class App(QtGui.QMainWindow):
             wl = data[0].getData()[0]
             flux = data[0].getData()[1]
             err = data[1].getData()[1]
-           
+            reply = qt.QMessageBox.question(self,'pickles','do you want a pickle?',qt.QMessageBox.Yes|qt.QMessageBox.No,qt.QMessageBox.No)
+            if reply == qt.QMessageBox.Yes:
+                options = qt.QFileDialog.Options()
+                options |= qt.QFileDialog.DontUseNativeDialog
+                pick,ok = qt.QFileDialog.getOpenFileName(self,"QFileDialog.getOpenFileName()","","All Files (*);;pickles (*.pkl)",options = options) 
             if len(self.contfit[0]) > 0:
                 items = ("{}".format(i) for i in range(len(self.contfit[0])))
                 cont, ok = qt.QInputDialog.getItem(self,"Continuum","Which Continuum?:",self.pdfs.keys(),0,False)
@@ -784,14 +823,67 @@ class App(QtGui.QMainWindow):
                 err_list = np.array([(finalwl[i+1] - finalwl[i])/2 * np.sqrt(finalerr[i+1]**2 + finalerr[i]**2) for i in range(len(finalwl)-1)])
                 EWerr = np.sqrt(np.sum(err_list**2) + pdf_err**2)
                 qt.QMessageBox.about(self,"Measured","Non-Parameterized EW: {0} \xb1 {1}".format(EW,EWerr))
+            elif reply == qt.QMessageBox.Yes:
+                cont_params = pd.read_pickle(pick)
+                #TODO: two scenarios (currently) 1: use slope m and intercept b to estimate continuum
+                # 2: use centroid, cont_amp, and unity to estimate continuum
+                # 1: continuum = cont_params['m']*lambda + cont_params['b']
+                # 2: continuum = cont_params['cont_amp']*(lamb/cont_params['unity'])**cont_params['alpha']
+                # Then, take (integral - continuum)/continuum to get the equivalent width
+                mask = (wl[:-1] > lr[0]) & (wl[:-1] < lr[1])
+                finalflux = flux[mask]
+                finalwl = wl[:-1][mask]
+                finalerr = err[mask]
+                ind = np.where(finalflux == np.max(finalflux))
+                z, ok = qt.QInputDialog.getDouble(self,"Get redshift","z:",2.0,0.0,10.0,10)
+                maxwl = 1215.56845*(1+z)
+                print(maxwl)
+                if 'cont_amp' not in cont_params.varnames:
+                    cont_pdf = Pow(maxwl,cont_params['amp'],cont_params['alpha'],cont_params['unity'])
+                else:
+                    cont_pdf = Pow(maxwl,cont_params['cont_amp'],cont_params['alpha'],cont_params['unity'])
+                left = qt.QInputDialog.getDouble(self,"left","What velocity left maximum?: ",0,False)
+                right = qt.QInputDialog.getDouble(self,"right","What velocity right maximum?: ",0,False)
+                newMask = (finalwl > maxwl*(1-(left[0]/3e5))) & (finalwl < maxwl*(1+(right[0]/3e5)))
+                #NOTE: this gives consistent results, though they may not be the best choice
+                finalflux = finalflux[newMask]
+                finalwl = finalwl[newMask]
+                finalerr = finalerr[newMask]
+                Limit_curve_top = pg.PlotCurveItem(finalwl,finalflux)
+                Limit_curve_bottom = pg.PlotCurveItem(finalwl,finalerr)#TODO: how to make fillbetween step?
+                self.fill = pg.FillBetweenItem(Limit_curve_bottom,Limit_curve_top,brush=(0,100,0,150))
+                self.plt[dat_choice].addItem(self.fill)
+
+
+                #Start EW determination
+                fluxes = np.random.normal(finalflux,scale=finalerr,size=(1000,len(finalflux)))#creating 1000 spectra according to distribution from fluxerr
+                #This allows the uncertainty in the flux measurements to affect the EW distribution
+                EW_pdf = np.zeros((len(fluxes),len(cont_pdf)))
+                for i,flux in enumerate(fluxes):#TODO: check logic of this. seems flawed
+                    fflux = [f - cont_pdf for f in flux]
+                    EW_pdf[i] = np.trapz(fflux,x=finalwl,axis=0)/cont_pdf
+                EW_pdf = EW_pdf.flatten()
+                EW = np.mean(EW_pdf)
+                self.pdfs['npEW'] = [EW_pdf,pd.core.series.Series([EW],index=["EW"])]
+                if 'm' in cont_params.varnames: flux_cont = linear(maxwl,cont_params['m'],cont_params['b'])
+                else: flux_cont = cont_pdf
+                actflux = np.zeros((len(fluxes),len(flux_cont)))
+                #embed()
+                for i,flux in enumerate(fluxes):
+                    tempflux = []
+                    for f in flux:
+                        tempflux.append(f-flux_cont)
+                    actflux[i] = np.trapz(tempflux,x=finalwl,axis=0)
+                self.pdfs['Flux'] = [actflux.flatten(),pd.core.series.Series([np.mean(actflux.flatten())],index=['Flux'])]
+                pdf_err = np.std(EW_pdf)
+                err_list = np.array([(finalwl[i+1] - finalwl[i])/2 * np.sqrt(finalerr[i+1]**2 + finalerr[i]**2) for i in range(len(finalwl)-1)])
+                EWerr = np.sqrt(np.sum(err_list**2) + pdf_err**2)
+                qt.QMessageBox.about(self,"Measured","Non-Parameterized EW: {0} \xb1 {1}".format(EW,EWerr))
             else:
                 qt.QMessageBox.about(self,"No continuum","No continuum available, not measuring")
         else:
             qt.QMessageBox.about(self,"No data","No data to measure")
 
-    #TODO: create something for grabbing filters (a couple hst for now) and 
-    #calculating the ratio between spectra and photometry to estimate 
-    #slitloss corrections
 
     def LineCenter(self):
         '''
@@ -1051,6 +1143,8 @@ class App(QtGui.QMainWindow):
             
             #Priors on model
             #NOTE: these are elements in vals in the order they appear in the code
+            #TODO: how to run this when there isn't an error spectrum? generally shouldn't require error spectrum
+            # some fits won't require the existence of an error spectrum.
             if name == "continuum":
                 if cname == "Power Law":
                     amp = pm.TruncatedNormal("amp",mu=(bounds[0][0]+bounds[0][1])/2,sigma=0.8*(bounds[0][1]-bounds[0][0]),testval=(bounds[0][0]+bounds[0][1])/2,lower=0.0000001)
@@ -1170,10 +1264,100 @@ class App(QtGui.QMainWindow):
         self.arviz[name] = trace 
         self.plt[plt_name].plot(data[0].getData()[0],cont*func(data[0].getData()[0],*vals['mean']),pen=pen)
         del(basic_model)
+
+    def S_N(self):
+        choice, ok = qt.QInputDialog.getItem(self,"Which spectrum?","Choose data set:",self.names1d,0,False)
+        if not(ok):
+            qt.QMessageBox.about(self,"Not checking","Chose no data, not fitting.")
+            return
+        dat_choice = self.names1d.index(choice)
+        data = self.plt[dat_choice].listDataItems()
+        check = [self.regPlot[i].getViewBox().viewRange()[0][0] for i in np.arange(len(self.regPlot))]
+        reg, ok = qt.QInputDialog.getItem(self,"Choose a region","Which plot?:",np.array(check,str),0,False)#TODO: allow for multiple regions? or only abs masking?
+        if not(ok):
+            qt.QMessageBox.about(self,"Not Fitting","Do not currently support no region choice")
+            return
+        mask_choice = check.index(float(reg))
+        lr = self.lrs[mask_choice].getRegion()
+        if len(data) > 0:
+            wl = data[0].getData()[0]
+            flux = data[0].getData()[1]
+            err = data[1].getData()[1]
+            mask = (wl[:-1] > lr[0]) & (wl[:-1] < lr[1])
+            finalflux = flux[mask]
+            finalwl = wl[:-1][mask]
+            finalerr = err[mask]
+            S_N_perpix = np.mean(finalflux/finalerr)
+            totflux = np.sum(finalflux)
+            toterr = np.sqrt(np.sum(finalerr**2))
+            qt.QMessageBox.about(self,"S/N ratio","S/N per wavelength bin: {0}. S/N total {1}".format(S_N_perpix,totflux/toterr))
+
+    
+    def pickle_plot(self):
+        basic_model = pm.Model()
+        with basic_model:
+            choice, ok = qt.QInputDialog.getItem(self,"Which to fit","Choose data set:",self.names1d,0,False)
+            if not(ok):
+                qt.QMessageBox.about(self,"Not Fitting","Chose no data, not fitting.")
+                return
+            options = qt.QFileDialog.Options()
+            options |= qt.QFileDialog.DontUseNativeDialog
+            pick,ok = qt.QFileDialog.getOpenFileName(self,"QFileDialog.getOpenFileName()","","pickles (*.pkl);;All Files (*)",options = options) 
+            dat_choice = self.names1d.index(choice)
+            data = self.plt[dat_choice].listDataItems()
+            cont_params = pd.read_pickle(pick)
+            vals = az.summary(cont_params,round_to=10)
+            curve, ok = qt.QInputDialog.getItem(self,"what kind of pickle?","Choose curve:",['gauss','voigt','power','linear','polynomial'],0,False)
+            if curve == 'gauss':
+                func = Powpgauss
+            elif curve == 'voigt':
+                #TODO: this doesn't really work for the voigt profile
+                func = piece
+            elif curve == 'power':
+                func = Pow
+            elif curve == 'linear':
+                func = linear
+            elif curve == 'polynomial':
+                func = polynomial
+            pen = (0,100,0)
+            embed()
+            self.plt[dat_choice].plot(data[0].getData()[0],func(data[0].getData()[0],*vals['mean']),pen=pen)
+        
         
     #TODO: Should consider allowing user to adjust parameterization
-    #but should make this a visual thing like a slider bar (It would be helpful to output the sigma
+    # but should make this a visual thing like a slider bar (It would be helpful to output the sigma
     # compared with the original choice for sigma in the normal distribution)
+    #TODO: I also want to show the corner plots for the parameterization
+    # and allow the user to hover over the space and select a point
+    # this point would then be used to plot the fit to the spectrum.
+    # This would mostly be an educational thing, though it may be useful
+    # for teasing out problem parameter spaces as well.
+    def save_spectrum(self):
+        choice, ok = qt.QInputDialog.getItem(self,"Which to fit","Choose data set:",self.names1d,0,False)
+        if not(ok):
+            qt.QMessageBox.about(self,"Not Fitting","Chose no data, not fitting.")
+            return
+        dat_choice = self.names1d.index(choice)
+        data = self.plt[dat_choice].listDataItems()
+        wl = data[0].getData()[0][:-1]
+        flux = data[0].getData()[1]
+        err = data[1].getData()[1]
+
+        new_data = np.rec.array([flux,err,wl],
+                    formats='float32,float32,float32',names='flux,sig,wave')
+        bintable = fits.BinTableHDU(new_data)
+        name, ok = qt.QInputDialog.getText(self,"Filename","Name the fits file:")
+        dir_ = QtGui.QFileDialog.getExistingDirectory(self, 'Select a folder:', 'C:\\', QtGui.QFileDialog.ShowDirsOnly)
+        if len(dir_) == 0:
+            return
+        cwd = os.getcwd()
+        os.chdir(dir_)        
+        if not(ok):
+            name = "basic"
+        bintable.writeto(name + ".fits")
+        os.chdir(cwd)  
+
+
     def save_data(self):
         '''
         routine to save parameter fits to .fits file
@@ -1252,35 +1436,49 @@ class App(QtGui.QMainWindow):
         '''
         essentially a corner plot with marginals=True
         '''
+        #TODO: Not able to select non-parameterized pdf if fits performed
         basic_model = pm.Model()
         with basic_model:
-            choice, ok = qt.QInputDialog.getItem(self,"Which run?","choose a data set:",self.arviz.keys(),0,False)
-            if not(ok):
-                return
-            vals = az.summary(self.arviz[choice],round_to=5,stat_funcs=[conf_low,conf_high])#var_names?
-            az.rcParams['plot.max_subplots'] = 80
-            axes = az.plot_pair(self.arviz[choice],kind=['hexbin',"kde"],kde_kwargs={"fill_last":False},marginals=True,point_estimate="mean",marginal_kwargs={"quantiles":[0.16,0.5,0.84]},figsize=(len(vals['mean']),len(vals['mean'])))
-            for i in range(len(axes)):
-                axes[i][i].set_title(r'${0}={1}_{{{2}}}^{{{3}}}$'.format(vals['mean'].keys()[i],vals['mean'][i],vals['conf_low'][i]-vals['mean'][i],vals['conf_high'][i]-vals['mean'][i]))
-            if (choice.find('EW') != -1) or (choice.find('Voigt') != -1):    
-                fig2 = plt.figure()
-                ax2 = plt.axes()
-                y,x,_ = ax2.hist(self.pdfs['EWPDF'][0],bins=100,density=True)
-                #embed()
-                up = conf_high(self.pdfs['EWPDF'][0])
-                down = conf_low(self.pdfs['EWPDF'][0])
-                m = np.mean(self.pdfs['EWPDF'][0])
-                ax2.vlines(m,0,np.max(y),color='k')
-                ax2.text(np.mean(x) - np.std(x),0.8*np.max(y),r'${0}^{{{1}}}_{{{2}}}$'.format(m,up-m,down-m))
-                ax2.set_xlabel('EW')
-                fig3 = plt.figure()
-                ax3 = plt.axes()
-                fy,fx,_ = ax3.hist(self.pdfs['Flux'][0],bins=100,density=True)
-                fup = conf_high(self.pdfs['Flux'][0])
-                fdown = conf_low(self.pdfs['Flux'][0])
-                fm = np.mean(self.pdfs['Flux'][0])
-                ax3.vlines(fm,0,np.max(fy),color='k')
-                ax3.text(np.mean(fx)-np.std(fx),0.8*np.max(fy),r'${0}^{{{1}}}_{{{2}}}$'.format(fm,fup-fm,fdown-fm))
+            if len(self.arviz.keys()) > 0:
+                choice, ok = qt.QInputDialog.getItem(self,"Which run?","choose a data set:",self.arviz.keys(),0,False)
+                if not(ok):
+                    return
+                vals = az.summary(self.arviz[choice],round_to=5,stat_funcs=[conf_low,conf_high])#var_names?
+                az.rcParams['plot.max_subplots'] = 80
+                axes = az.plot_pair(self.arviz[choice],kind=['hexbin',"kde"],kde_kwargs={"fill_last":False},marginals=True,point_estimate="mean",marginal_kwargs={"quantiles":[0.16,0.5,0.84]},figsize=(len(vals['mean']),len(vals['mean'])))
+                for i in range(len(axes)):
+                    axes[i][i].set_title(r'${0}={1}_{{{2}}}^{{{3}}}$'.format(vals['mean'].keys()[i],vals['mean'][i],vals['conf_low'][i]-vals['mean'][i],vals['conf_high'][i]-vals['mean'][i]))
+                if (choice.find('EW') != -1) or (choice.find('Voigt') != -1):    
+                    fig2 = plt.figure()
+                    ax2 = plt.axes()
+                    y,x,_ = ax2.hist(self.pdfs['EWPDF'][0],bins=100,density=True)
+                    #embed()
+                    up = conf_high(self.pdfs['EWPDF'][0])
+                    down = conf_low(self.pdfs['EWPDF'][0])
+                    m = np.mean(self.pdfs['EWPDF'][0])
+                    ax2.vlines(m,0,np.max(y),color='k')
+                    ax2.text(np.mean(x) - np.std(x),0.8*np.max(y),r'${0}^{{{1}}}_{{{2}}}$'.format(m,up-m,down-m))
+                    ax2.set_xlabel('EW')
+                    fig3 = plt.figure()
+                    ax3 = plt.axes()
+                    fy,fx,_ = ax3.hist(self.pdfs['Flux'][0],bins=100,density=True)
+                    fup = conf_high(self.pdfs['Flux'][0])
+                    fdown = conf_low(self.pdfs['Flux'][0])
+                    fm = np.mean(self.pdfs['Flux'][0])
+                    ax3.vlines(fm,0,np.max(fy),color='k')
+                    ax3.text(np.mean(fx)-np.std(fx),0.8*np.max(fy),r'${0}^{{{1}}}_{{{2}}}$'.format(fm,fup-fm,fdown-fm))
+            else:
+                choice, ok = qt.QInputDialog.getItem(self,"Which run?","choose a data set:",self.pdfs.keys(),0,False)
+                fig1 = plt.figure()
+                ax1 = plt.axes()
+                pandadat = pd.DataFrame(self.pdfs[choice][0])#TODO: dataframes are much faster, good idea to
+                #port all math into pandas dataframes
+                y,x,_ = ax1.hist(pandadat,bins=100,density=True)
+                up = pandadat.quantile(q=0.841,interpolation='linear')[0]
+                down = pandadat.quantile(q=0.159,interpolation='linear')[0]
+                m = pandadat.quantile(q=0.5,interpolation='linear')[0]
+                ax1.vlines(m,0,np.max(y),color='k')
+                ax1.text(np.mean(x) - np.std(x),0.8*np.max(y),r'${0}^{{{1}}}_{{{2}}}$'.format(m,up-m,down-m),fontsize=25)
             plt.show()
         del(basic_model)
 
@@ -1537,13 +1735,26 @@ class App(QtGui.QMainWindow):
     #TODO: generalize, currently constructed for pypeit 1.3.3
     def coadd_1d(self,files):
         hdul = []
+        a = []
         for f in files:
+            
             hdul.append(fits.open(f))
+            if f.split('/')[-1] == "1212_M114":
+                a.append(1.28)
+            elif f.split('/')[-1] == "1212_M1":
+                a.append(1.12)
+            else:
+                a.append(1)
         resdata = []
         new_grid = np.arange(3000,6000,2.18)
+        count = 0
+        print(a)
         for h in hdul:
             data = h[1].data
-            resdata.append(spectres(new_grid,data['wave'],data['flux'],1/np.sqrt(data['ivar'])))
+            try: resdata.append(spectres(new_grid,data['wave'],a[count]*data['flux'],a[count]*1/np.sqrt(data['ivar'])))
+            except KeyError:  resdata.append(spectres(new_grid,data['wave'],a[count]*data['flux'],a[count]*data['sig']))
+            else: pass
+            count += 1
 
         ivar_new = np.array([i[1] for i in resdata])
         ivar_new = 1/np.square(ivar_new)
@@ -1725,7 +1936,9 @@ class App(QtGui.QMainWindow):
             qt.QMessageBox.about(self,"Error","Data has {0} dimensions but images require 2 dimensions".format(data.ndim))
             self.imv.close()
             return
-        self.imv.setImage(data,levels=(-10,10))
+        mean = np.mean(data)
+        sd = np.std(data)    
+        self.imv.setImage(data,levels=(mean - 3*sd,mean + 3*sd))
         self.imv.setCursor(QtCore.Qt.CrossCursor)
         self.isigprox = pg.SignalProxy(self.imv.scene.sigMouseMoved,rateLimit=60,slot=self.imageHoverEvent)
     

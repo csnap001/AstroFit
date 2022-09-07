@@ -46,4 +46,7 @@ def buttons(self):
         self.extract1d = qt.QPushButton("Extract from ROI",self)
         self.upperlim = qt.QPushButton("Upper Limit",self)
         self.specphotflux = qt.QPushButton("Slit loss estimate",self)
+        self.savespec = qt.QPushButton("Save Spectrum",self)
+        self.picplot = qt.QPushButton("Pickle Plot",self)
+        self.S_to_N = qt.QPushButton("S/N",self)
         return
