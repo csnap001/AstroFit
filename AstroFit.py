@@ -590,8 +590,11 @@ class App(QtGui.QMainWindow):
             self.table.setColumnCount(len(data.colnames))
             self.table.setRowCount(len(data))
             self.table.setHorizontalHeaderLabels(data.colnames)
+            self.table.setData(np.array(data))
+            '''
             for i in range(len(data)):
                 self.table.setRow(i,data[i])
+            '''
         if not(dat == -1):
             pass
         if not(txt == -1):
