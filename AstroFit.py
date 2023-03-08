@@ -755,6 +755,37 @@ class App(QtGui.QMainWindow):
 
         self.lrs[len(self.lrs)-1].sigRegionChanged.connect(self.updateLRplot)
 
+    def duEW(self):
+        '''
+        Module Hack. Method used by Du et al. 2018 to measure Lya EW
+        '''
+
+        choice, ok = qt.QInputDialog.getItem(self,"Which to fit","Choose data set:",self.names1d,0,False)
+        if not(ok):
+            qt.QMessageBox.about(self,"Not Measuring","Chose no data, not measuring EW.")
+            return
+        dat_choice = self.names1d.index(choice)
+        data = self.plt[dat_choice].listDataItems()
+
+        wl = data[0].getData()[0]
+        flux = data[0].getData()[1]
+        err = data[1].getData()[1]
+
+        z, ok = qt.QInputDialog.getDouble(self,"Get redshift","z:",2.0,0.0,10.0,10)
+        wl_0 = wl[:-1]/(z+1.0)
+        #print(len(wl_0))
+        mask_flux = (wl_0>1208)&(wl_0 < 1239.9)
+        mask_cont = (wl_0>1225)&(wl_0 < 1255)
+        mask_blue = (wl_0>1206)&(wl_0 < 1210)
+        print(np.mean(flux[mask_cont]))
+        cont = (np.mean(flux[mask_cont]) + np.mean(flux[mask_blue]))/2
+        EW = np.trapz((flux[mask_flux])-cont,x=wl_0[mask_flux])/cont
+        mean_err = np.sqrt(np.sum(err[mask_cont]**2)/(len(err[mask_cont])**2) + np.sum(err[mask_blue]**2)/(len(err[mask_blue])**2))
+        diff_err = np.sqrt(err[mask_flux]**2 + mean_err**2)
+        ratio_err = ((flux[mask_flux]-cont)/np.mean(flux[mask_cont]))*np.sqrt((diff_err/(flux[mask_flux]-cont))**2 + (mean_err/np.mean(flux[mask_cont]))**2)
+        EW_err = (np.mean(np.diff(wl_0[mask_flux]))/2)*np.sqrt(2*np.sum(ratio_err[1:-1]**2) + ratio_err[0]**2 + ratio_err[-1]**2)
+        qt.QMessageBox.about(self,"Du EW",r"$EW:{0}\pm {1}\;\rm (\AA)$".format(EW*(z+1.0),EW_err*(z+1.0)))
+
     def nonParamEW(self):
         '''
         Module for Non-parameterized Equivalent width determination

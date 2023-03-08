@@ -49,4 +49,5 @@ def buttons(self):
         self.savespec = qt.QPushButton("Save Spectrum",self)
         self.picplot = qt.QPushButton("Pickle Plot",self)
         self.S_to_N = qt.QPushButton("S/N",self)
+        self.DuEW = qt.QPushButton("Du EW",self)
         return

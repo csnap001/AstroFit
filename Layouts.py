@@ -48,3 +48,4 @@ def Lay(self):
         self.toolbar.addWidget(self.savespec)
         self.toolbar.addWidget(self.picplot)
         self.toolbar.addWidget(self.S_to_N)
+        self.toolbar.addWidget(self.DuEW)
