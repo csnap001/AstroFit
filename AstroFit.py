@@ -91,7 +91,7 @@ import create_buttons as cb
 import connect_buttons as conb
 from Layouts import Lay
 import time
-import pymc3 as pm
+#import pymc3 as pm
 import arviz as az
 import matplotlib.pyplot as plt
 from functools import partial
@@ -107,8 +107,9 @@ from PyQt5.QtWidgets import QApplication, QHBoxLayout, QLabel, QSizePolicy, QSli
     QVBoxLayout, QWidget, QToolBar
 from scipy.ndimage import gaussian_filter1d
 from spectres import spectres
-import theano.tensor as t
-import theano
+#import theano.tensor as t
+
+#import theano
 from multipledispatch import dispatch
 
 def conf_low(data,half=0.34):
@@ -155,6 +156,7 @@ def gauss0(x,A0,x0,b0):
 def polygauss(x,Ag,xg,bg,b,m):
     return polynomial(x,b,m) + gauss0(x,Ag,xg,bg)
 
+'''
 def piece(x,b,xb,xc,xg,A0,Ag,a,bg,m):
     return pm.math.switch(x <= xb,polygauss(x,Ag,xg,bg,b,m),Pow(x,A0,a,xc)).eval()
 
@@ -184,7 +186,7 @@ def piecewise(x,xb,xc,xg,A0,Ag,a,bg,b,m):
     y[mask] = polygauss(x[mask],Ag,xg,bg,b,m)
     y[~mask] = Pow(x[~mask],A0,xc,a)
     return y
-
+'''
 def Voigt(x,A0,Nl,x0,sig):
     return abs(A0)*np.exp(-0.7580*(Nl/10e13)*(10/sig)*gauss0(3e5*(x-x0)/x0,1,0,sig))
 
@@ -226,7 +228,7 @@ class Slider(QWidget):
         self.maximum - self.minimum)
         self.label.setText("{0:.4g}".format(self.x))
 
-class App(QtGui.QMainWindow):
+class App(qt.QMainWindow):#was previously QTGui.QMainWindow
 
     def __init__(self):
         super().__init__()
@@ -248,6 +250,7 @@ class App(QtGui.QMainWindow):
         self.prior = []#list of continuum priors that can be used
         self.fill = None
         self.memory = [] #used to have access to unsmoothed data
+        self.text_label = ""#needed for printing data to 2d images
 
         self.is1d = False
         self.is2d = False
@@ -301,13 +304,13 @@ class App(QtGui.QMainWindow):
         self.regDock = Dock("Regions",size=(500,300))
         self.plot2d = Dock("2d image",size=(300,300))
         # TODO: widgets also have "close" function, or at least imageviews do
-        self.regWin = pg.GraphicsWindow()
+        self.regWin = pg.GraphicsView()
         self.area.addDock(self.dtool,'top')
         self.area.addDock(self.dplot,'bottom',self.dtool)
         self.area.addDock(self.dTable,'bottom',self.dplot)
         self.area.addDock(self.regDock,'below',self.dTable)
         self.area.addDock(self.plot2d,"right",self.dplot)
-        self.Gwin1d = pg.GraphicsWindow()
+        self.Gwin1d = pg.GraphicsView()
         self.Gwin1d.resize(1000,600)
         self.table = pg.TableWidget()
         self.dplot.addWidget(self.Gwin1d)
@@ -327,21 +330,43 @@ class App(QtGui.QMainWindow):
             self.plot2d.setTitle("Not working")
             return
         '''
-        #embed()
+
         point = event[0]
         data = self.imv.image
         vb = self.imv.getView().getViewBox()
-        #embed()
+
         point = vb.mapSceneToView(event[0])
-        i, j = point.y(), point.x()
-        #embed()
-        i = int(np.clip(i, 0, data.shape[0] - 1))
-        j = int(np.clip(j, 0, data.shape[1] - 1))
-        val = data[j, i]
-        wl = self.imv.tVals[j,i]
-        ppos = self.imv.mapToParent(point.toPoint())
-        x, y = ppos.x(), ppos.y()
-        self.plot2d.setTitle(r"pixel: (%d, %d)  value: %g  $wl (\AA)$: (%0.1f)" % (i, j, val,wl))
+        if data.ndim == 2:
+            i, j = point.y(), point.x()
+
+            i = int(np.clip(i, 0, data.shape[0] - 1))
+            j = int(np.clip(j, 0, data.shape[1] - 1))
+            val = data[j, i]
+            wl = self.imv.tVals[j,i]
+            ppos = self.imv.mapToParent(point.toPoint())
+            x, y = ppos.x(), ppos.y()
+            vb = self.imv.getView()
+            vb.removeItem(self.text_label)
+            self.text_label = pg.TextItem(f"pixel: (%d, %d) \n value: %g  $wl (\AA)$: (%0.1f)" % (i, j, val,wl))
+            vb.addItem(self.text_label)
+            self.text_label.setPos(x,y)
+        else:
+            i, j = point.y(), point.x()
+            i = int(np.clip(i, 0, data.shape[1] - 1))
+            j = int(np.clip(j, 0, data.shape[2] - 1))
+            valR = data[0,j, i]
+            valG = data[1,j,i]
+            valB = data[2,j,i]
+            ppos = self.imv.mapToParent(point.toPoint())
+            x, y = ppos.x(), ppos.y()
+            #embed()
+            #self.plot2d.setTitle(r"pixel: (%d, %d) value red: %g value green: %g value blue: %g)" % (i, j, valR,valG,valB))
+            vb = self.imv.getView()
+            vb.removeItem(self.text_label)
+            self.text_label = pg.TextItem(f"pixel: (%d, %d) \n value red: %g \nvalue green: %g \nvalue blue: %g)" % (j, i, valR,valG,valB),color="magenta")
+            vb.addItem(self.text_label)
+            self.text_label.setPos(x,y)
+
 
     def smooth_update(self):
         data = self.memory[0]
@@ -590,8 +615,11 @@ class App(QtGui.QMainWindow):
             self.table.setColumnCount(len(data.colnames))
             self.table.setRowCount(len(data))
             self.table.setHorizontalHeaderLabels(data.colnames)
+            self.table.setData(np.array(data))
+            '''
             for i in range(len(data)):
                 self.table.setRow(i,data[i])
+            '''
         if not(dat == -1):
             pass
         if not(txt == -1):
@@ -751,6 +779,37 @@ class App(QtGui.QMainWindow):
         self.addRegionPlot(data)
 
         self.lrs[len(self.lrs)-1].sigRegionChanged.connect(self.updateLRplot)
+
+    def duEW(self):
+        '''
+        Module Hack. Method used by Du et al. 2018 to measure Lya EW
+        '''
+
+        choice, ok = qt.QInputDialog.getItem(self,"Which to fit","Choose data set:",self.names1d,0,False)
+        if not(ok):
+            qt.QMessageBox.about(self,"Not Measuring","Chose no data, not measuring EW.")
+            return
+        dat_choice = self.names1d.index(choice)
+        data = self.plt[dat_choice].listDataItems()
+
+        wl = data[0].getData()[0]
+        flux = data[0].getData()[1]
+        err = data[1].getData()[1]
+
+        z, ok = qt.QInputDialog.getDouble(self,"Get redshift","z:",2.0,0.0,10.0,10)
+        wl_0 = wl[:-1]/(z+1.0)
+        #print(len(wl_0))
+        mask_flux = (wl_0>1208)&(wl_0 < 1239.9)
+        mask_cont = (wl_0>1225)&(wl_0 < 1255)
+        mask_blue = (wl_0>1206)&(wl_0 < 1210)
+        print(np.mean(flux[mask_cont]))
+        cont = (np.mean(flux[mask_cont]) + np.mean(flux[mask_blue]))/2
+        EW = np.trapz((flux[mask_flux])-cont,x=wl_0[mask_flux])/cont
+        mean_err = np.sqrt(np.sum(err[mask_cont]**2)/(len(err[mask_cont])**2) + np.sum(err[mask_blue]**2)/(len(err[mask_blue])**2))
+        diff_err = np.sqrt(err[mask_flux]**2 + mean_err**2)
+        ratio_err = ((flux[mask_flux]-cont)/np.mean(flux[mask_cont]))*np.sqrt((diff_err/(flux[mask_flux]-cont))**2 + (mean_err/np.mean(flux[mask_cont]))**2)
+        EW_err = (np.mean(np.diff(wl_0[mask_flux]))/2)*np.sqrt(2*np.sum(ratio_err[1:-1]**2) + ratio_err[0]**2 + ratio_err[-1]**2)
+        qt.QMessageBox.about(self,"Du EW",r"$EW:{0}\pm {1}\;\rm (\AA)$".format(EW*(z+1.0),EW_err*(z+1.0)))
 
     def nonParamEW(self):
         '''
@@ -1129,6 +1188,8 @@ class App(QtGui.QMainWindow):
         '''
         helper function for fitting algorithms (cont_fit, and ew)
         '''
+        print("pymc3 is deprecated. Likely need to overhaul fitting code. Exiting")
+        exit()
         #TODO: Threading for progress bar? Maybe just add in self.MCMC code block?
         #embed()
         basic_model = pm.Model()
@@ -1362,6 +1423,8 @@ class App(QtGui.QMainWindow):
         '''
         routine to save parameter fits to .fits file
         '''
+        print("pymc3 is depricated. likely need to overhaul fitting code. exiting.")
+        exit()
         basic_model = pm.Model()
         with basic_model:
             choice, ok = qt.QInputDialog.getItem(self,"Which run?","choose a data set:",self.arviz.keys(),0,False)
@@ -1932,15 +1995,24 @@ class App(QtGui.QMainWindow):
         data = hdul[choice].data
         self.imv = pg.ImageView(view=pg.PlotItem())
         self.plot2d.addWidget(self.imv)
+        
         if data.ndim != 2:
+        
+            mean = np.mean(data)
+            sd = np.std(data)    
+            self.imv.setImage(data,levels=(mean - 3*sd,mean + 3*sd))
+            self.imv.setCursor(QtCore.Qt.CrossCursor)
+            self.isigprox = pg.SignalProxy(self.imv.scene.sigMouseMoved,rateLimit=60,slot=self.imageHoverEvent)
+        elif data.ndim == 3:
+            #do something
+            mean = np.mean(data)
+            sd = np.std(data)    
+            self.imv.setImage(data,levels=(mean - 3*sd,mean + 3*sd),levelMode="rgb")
+            self.imv.setCursor(QtCore.Qt.CrossCursor)
+        else:
             qt.QMessageBox.about(self,"Error","Data has {0} dimensions but images require 2 dimensions".format(data.ndim))
             self.imv.close()
             return
-        mean = np.mean(data)
-        sd = np.std(data)    
-        self.imv.setImage(data,levels=(mean - 3*sd,mean + 3*sd))
-        self.imv.setCursor(QtCore.Qt.CrossCursor)
-        self.isigprox = pg.SignalProxy(self.imv.scene.sigMouseMoved,rateLimit=60,slot=self.imageHoverEvent)
     
             
 if __name__ == '__main__':
