@@ -22,11 +22,11 @@
 
 # 2D viewing and fitting
  Currently this code allows viewing and minimal analysis of 2D fits files. There is some
- ability to extract 1D structions from regions of interest (ROIs), but little analysis
+ ability to extract 1D structers from regions of interest (ROIs), but little analysis
  capabilities beyond this at this time. future iterations of the code will include 
  segmentation mapping capabilities. Ideally this will include the ability to change the 
  sigma values to show which pixels are observed for a given sigma value. This will be
- primarily an educational tool that will hopefully help researchers visualize there data.
+ primarily an educational tool that will help researchers visualize there data.
 
 # Tables
  Currently this code also supports fits tables, but with zero functionality beyond viewing data
